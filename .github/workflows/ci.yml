@@ -25,12 +25,14 @@ jobs:
 
       - name: Django system checks
         env:
-          DEBUG: "True"
+          DEBUG: "False"
+          SECRET_KEY: "auto-generated-for-ci-only-please-override"
         run: |
           python manage.py check --deploy --fail-level WARNING
 
       - name: Run tests
         env:
-          DEBUG: "True"
+          DEBUG: "False"
+          SECRET_KEY: "auto-generated-for-ci-only-please-override"
         run: |
           python manage.py test -v 2

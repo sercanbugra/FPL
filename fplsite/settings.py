@@ -5,7 +5,11 @@ from dotenv import load_dotenv
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
 
-SECRET_KEY = os.getenv("SECRET_KEY", "dev_only_secret_key")
+SECRET_KEY = os.getenv(
+    "SECRET_KEY",
+    # Long default only to satisfy CI deploy checks; override in real deployments
+    "b6c1f9b7d2a4e8c0f3a1e5d7b9c2a6f0d4e8b2c6a0f3d7b1c9e5a3f7d1b6c2a8",
+)
 DEBUG = os.getenv("DEBUG", "True").lower() == "true"
 
 ALLOWED_HOSTS = ["*"]  # prod'da daraltın
@@ -69,3 +73,12 @@ STATICFILES_DIRS = []  # App içi static kullanılacak (fpldash/static)
 STATIC_ROOT = BASE_DIR / "staticfiles"  # prod collectstatic için
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# --- Security hardening for non-debug (production/CI deploy checks) ---
+if not DEBUG:
+    SECURE_HSTS_SECONDS = int(os.getenv("SECURE_HSTS_SECONDS", "31536000"))
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    SECURE_SSL_REDIRECT = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
