@@ -25,8 +25,9 @@ INSTALLED_APPS = [
     "fpldash",
 ]
 
-MIDDLEWARE = [`n    "whitenoise.middleware.WhiteNoiseMiddleware",
+MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -85,4 +86,5 @@ if not DEBUG:
 
 
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
 
