@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, feature/**, fix/** ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  django-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Django system checks
+        env:
+          DEBUG: "False"
+          SECRET_KEY: "ci-only_please_override_b6C1f9B7D2a4E8c0F3a1E5d7B9c2A6f0D4e8B2c6A0f3D7b1C9e5A3f7D1b6C2a8!@#"
+        run: |
+          python manage.py check --deploy --fail-level WARNING
+
+      - name: Run tests
+        env:
+          DEBUG: "False"
+          SECRET_KEY: "ci-only_please_override_b6C1f9B7D2a4E8c0F3a1E5d7B9c2A6f0D4e8B2c6A0f3D7b1C9e5A3f7D1b6C2a8!@#"
+        run: |
+          python manage.py test -v 2
