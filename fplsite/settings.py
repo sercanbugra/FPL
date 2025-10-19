@@ -1,4 +1,4 @@
-import os
+﻿import os
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -12,7 +12,7 @@ SECRET_KEY = os.getenv(
 )
 DEBUG = os.getenv("DEBUG", "True").lower() == "true"
 
-ALLOWED_HOSTS = ["*"]  # prod'da daraltın
+ALLOWED_HOSTS = ["*"]  # prod'da daraltÄ±n
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -25,7 +25,7 @@ INSTALLED_APPS = [
     "fpldash",
 ]
 
-MIDDLEWARE = [
+MIDDLEWARE = [`n    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -40,7 +40,7 @@ ROOT_URLCONF = "fplsite.urls"
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [],  # app içi templates kullanılacak
+        "DIRS": [],  # app iÃ§i templates kullanÄ±lacak
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -55,7 +55,7 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "fplsite.wsgi.application"
 
-# DB gerekmiyor ama varsayılan bırakıyoruz
+# DB gerekmiyor ama varsayÄ±lan bÄ±rakÄ±yoruz
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
@@ -68,9 +68,9 @@ TIME_ZONE = "Europe/Madrid"
 USE_I18N = True
 USE_TZ = True
 
-STATIC_URL = "static/"
-STATICFILES_DIRS = []  # App içi static kullanılacak (fpldash/static)
-STATIC_ROOT = BASE_DIR / "staticfiles"  # prod collectstatic için
+STATIC_URL = "/static/"
+STATICFILES_DIRS = []  # App iÃ§i static kullanÄ±lacak (fpldash/static)
+STATIC_ROOT = BASE_DIR / "staticfiles"  # prod collectstatic iÃ§in
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
@@ -82,3 +82,7 @@ if not DEBUG:
     SECURE_SSL_REDIRECT = True
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
+
+
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
