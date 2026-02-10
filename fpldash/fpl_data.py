@@ -22,7 +22,7 @@ def get_fpl_data():
     # --- Derived Columns ---
     df["Team"] = df["team"].map(teams)
     df["Position"] = df["element_type"].map(positions)
-    df["Last Week Price (Â£m)"] = df["now_cost"] / 10.0
+    df["Last Week Price (GBP m)"] = df["now_cost"] / 10.0
 
     # Calculate approximate appearances (based on minutes played)
     df["Appearances"] = (df["minutes"] / 90).round(0).astype(int)
@@ -61,7 +61,8 @@ def get_fpl_data():
     # --- Build Output DataFrame ---
     df_out = pd.DataFrame({
         "Player": df["web_name"],
-        
+        "PlayerId": df["id"].astype(int),
+        "PlayerPhoto": df["photo"].astype(str).str.split(".").str[0],
         "Position": df["Position"],
         "Team": df["Team"],
         "Total Points": df["total_points"].astype(int),
@@ -79,12 +80,7 @@ def get_fpl_data():
         
     })
 
-    # Add identifiers expected by the frontend and fix price label encoding
-    
-    # Ensure price header shows the £ symbol correctly
-    # Add ASCII price header and remove mojibake version
     df_out["Last Week Price (GBP m)"] = (df["now_cost"] / 10.0).round(1)
-    df_out.drop(columns=["Last Week Price (��m)"], errors="ignore", inplace=True)
     # Sort by Total Points
     df_out.sort_values(by="Total Points", ascending=False, inplace=True)
 

@@ -10,9 +10,14 @@ SECRET_KEY = os.getenv(
     # Long default only to satisfy CI deploy checks; override in real deployments
     "b6c1f9b7d2a4e8c0f3a1e5d7b9c2a6f0d4e8b2c6a0f3d7b1c9e5a3f7d1b6c2a8",
 )
-DEBUG = os.getenv("DEBUG", "True").lower() == "true"
+DEBUG = os.getenv("DEBUG", "False").lower() == "true"
 
-ALLOWED_HOSTS = ["*"]  # prod'da daraltÄ±n
+# Comma-separated host list, e.g. "example.com,www.example.com"
+ALLOWED_HOSTS = [
+    h.strip()
+    for h in os.getenv("ALLOWED_HOSTS", "127.0.0.1,localhost").split(",")
+    if h.strip()
+]
 
 INSTALLED_APPS = [
     "django.contrib.admin",

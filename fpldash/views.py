@@ -245,7 +245,11 @@ def _fetch_tweets_via_nitter(username: str, days: int = 7):
 
 def api_pricechanges(request):
     username = request.GET.get("user", "fplpricechanges")
-    days = int(request.GET.get("days", "7"))
+    try:
+        days = int(request.GET.get("days", "7"))
+    except (TypeError, ValueError):
+        days = 7
+    days = max(1, min(days, 30))
 
     # Prefer official API when token is present
     data = _fetch_tweets_via_api(username, days)

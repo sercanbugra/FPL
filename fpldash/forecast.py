@@ -26,7 +26,7 @@ def get_forecast_data(limit: int = 50) -> List[Dict]:
     teams = {t["id"]: t["name"] for t in data["teams"]}
     positions = {1: "GK", 2: "DEF", 3: "MID", 4: "FWD"}
 
-    # Determine latest finished or current GW
+    # Determine the latest GW to display in columns (current if exists, otherwise finished/next)
     events = data.get("events", [])
     latest_gw = None
     for ev in events:
@@ -38,6 +38,10 @@ def get_forecast_data(limit: int = 50) -> List[Dict]:
         ids = [ev.get("id") for ev in events if ev.get("finished") or ev.get("is_next")]
         latest_gw = max(ids) if ids else 1
 
+    # Last fully finished GW for using recent realized points in predictions
+    finished_ids = [ev.get("id") for ev in events if ev.get("finished")]
+    last_finished_gw = max(finished_ids) if finished_ids else None
+
     df = pd.DataFrame(elements)
     df["form"] = pd.to_numeric(df["form"], errors="coerce").fillna(0.0)
     df["points_per_game"] = pd.to_numeric(df["points_per_game"], errors="coerce").fillna(0.0)
@@ -45,7 +49,7 @@ def get_forecast_data(limit: int = 50) -> List[Dict]:
     df["Team"] = df["team"].map(teams)
     df["Position"] = df["element_type"].map(positions)
 
-    # Heuristic predictions
+    # Initial heuristic predictions (will be refined with last finished GW points)
     df["Pred_LightGBM"] = df["form"]
     df["Pred_XGBoost"] = df["points_per_game"]
     df["Predicted_Avg"] = (df["Pred_LightGBM"] + df["Pred_XGBoost"]) / 2.0
@@ -58,6 +62,7 @@ def get_forecast_data(limit: int = 50) -> List[Dict]:
     week_cols = [f"W{i}" for i in range(1, int(latest_gw) + 1)]
     for col in week_cols:
         top[col] = ""
+    top["Last_GW_Points"] = 0.0
 
     # Fetch weekly totals for each selected player
     for idx, row in top.iterrows():
@@ -74,10 +79,26 @@ def get_forecast_data(limit: int = 50) -> List[Dict]:
                 pts = h.get("total_points")
                 if isinstance(rnd, int) and 1 <= rnd <= latest_gw:
                     top.at[idx, f"W{rnd}"] = pts
+                if (
+                    last_finished_gw is not None
+                    and isinstance(rnd, int)
+                    and rnd == last_finished_gw
+                ):
+                    top.at[idx, "Last_GW_Points"] = float(pts or 0.0)
         except Exception:
             continue
 
+    # Refine predictions by including the last finished GW points
+    # This ensures the most recent completed week directly affects prediction output.
+    top["Pred_LightGBM"] = (0.7 * top["form"]) + (0.3 * top["Last_GW_Points"])
+    top["Pred_XGBoost"] = (0.6 * top["points_per_game"]) + (0.4 * top["Last_GW_Points"])
+    top["Predicted_Avg"] = (top["Pred_LightGBM"] + top["Pred_XGBoost"]) / 2.0
+
+    # Re-sort with updated predictions
+    top = top.sort_values("Predicted_Avg", ascending=False).copy()
+
     # Round predictions for readability
+    top["Last_GW_Points"] = top["Last_GW_Points"].round(2)
     top["Pred_LightGBM"] = top["Pred_LightGBM"].round(2)
     top["Pred_XGBoost"] = top["Pred_XGBoost"].round(2)
     top["Predicted_Avg"] = top["Predicted_Avg"].round(2)

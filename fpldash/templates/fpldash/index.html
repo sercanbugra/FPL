@@ -354,7 +354,7 @@
       tbl.appendChild(thead);
       const tbody = document.createElement('tbody');
 
-      const playerId = player.PlayerId || player.id;
+      const playerId = player.PlayerId || player.id || player.ID;
       try {
         if (!playerId) throw new Error('Missing player id');
         const res = await fetch(`/api/player-summary/${playerId}`);
