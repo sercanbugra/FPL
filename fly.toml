@@ -5,7 +5,7 @@ primary_region = "ams"
   PORT = "8080"
   DJANGO_SETTINGS_MODULE = "fplsite.settings"
   DEBUG = "False"
-  ALLOWED_HOSTS = "fpl-n0-lhw.fly.dev"
+  ALLOWED_HOSTS = "*,fpl-n0-lhw.fly.dev"
 
 [http_service]
   internal_port = 8080
