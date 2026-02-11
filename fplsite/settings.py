@@ -82,6 +82,8 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # --- Security hardening for non-debug (production/CI deploy checks) ---
 if not DEBUG:
+    # Fly terminates TLS at the edge and forwards requests to the app.
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
     SECURE_HSTS_SECONDS = int(os.getenv("SECURE_HSTS_SECONDS", "31536000"))
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True

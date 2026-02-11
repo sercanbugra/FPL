@@ -1,24 +1,18 @@
-ARG PYTHON_VERSION=3.10-slim
+FROM python:3.11-slim
 
-FROM python:${PYTHON_VERSION}
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV PORT=8080
 
-ENV PYTHONDONTWRITEBYTECODE 1
-ENV PYTHONUNBUFFERED 1
+WORKDIR /app
 
-RUN mkdir -p /code
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-WORKDIR /code
+COPY . .
 
-COPY requirements.txt /tmp/requirements.txt
-RUN set -ex && \
-    pip install --upgrade pip && \
-    pip install -r /tmp/requirements.txt && \
-    rm -rf /root/.cache/
-COPY . /code
-
-ENV SECRET_KEY "ONRare6wSHxJbF5IA9k7Ziga16s3v63Yb5SqzVsPqWhB2Td4Nm"
 RUN python manage.py collectstatic --noinput
 
-EXPOSE 8000
+EXPOSE 8080
 
-CMD ["gunicorn","--bind",":8000","--workers","2","fplsite.wsgi"]
+CMD ["sh", "-c", "gunicorn fplsite.wsgi:application --bind 0.0.0.0:${PORT} --workers 2 --timeout 120"]
