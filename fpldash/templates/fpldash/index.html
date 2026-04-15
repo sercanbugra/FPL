@@ -144,8 +144,9 @@ function posBadge(pos) {
 }
 function fdrBadge(val) {
   const n = parseFloat(val);
+  if (!n) return '<span class="fdr-badge fdr-na">N/A</span>';
   const cls = n <= 2 ? 'fdr-1' : n >= 4 ? 'fdr-4' : 'fdr-3';
-  return `<span class="fdr-badge ${cls}">${val}</span>`;
+  return `<span class="fdr-badge ${cls}">${n.toFixed(1)}</span>`;
 }
 function linkify(text) {
   if (!text) return '';

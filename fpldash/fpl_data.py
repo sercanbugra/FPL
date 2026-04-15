@@ -35,8 +35,9 @@ def get_fpl_data() -> pd.DataFrame:
 
     df["Appearances"] = (df["minutes"] / 90).round(0).astype(int)
 
-    # Players with 0 appearances have no meaningful FDR — mark as N/A
-    df.loc[df["Appearances"] == 0, "FDR Next 3"] = None
+    # Players with 0 appearances have no meaningful FDR — sentinel 0 rendered as N/A
+    # (None → NaN → invalid JSON "NaN"; 0.0 serialises cleanly and fdrBadge handles it)
+    df.loc[df["Appearances"] == 0, "FDR Next 3"] = 0.0
 
     df["Median Points"] = df["points_per_game"].astype(float)
     df["Weighted Avg Points"] = (

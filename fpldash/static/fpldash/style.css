@@ -460,6 +460,7 @@ html, body {
 .fdr-1, .fdr-2 { background: var(--success); }
 .fdr-3         { background: var(--warning); }
 .fdr-4, .fdr-5 { background: var(--danger);  }
+.fdr-na        { background: #64748b; }
 
 /* ============================================================
    DATATABLES OVERRIDES
