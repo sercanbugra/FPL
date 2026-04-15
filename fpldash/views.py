@@ -1,14 +1,20 @@
-﻿import os
+import os
+import re
+import xml.etree.ElementTree as ET
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime, timedelta, timezone
+
 import requests
 from django.http import JsonResponse
 from django.shortcuts import render
-from django.conf import settings
-import pandas as pd
-from pathlib import Path
-from .forecast import get_forecast_data
+
+from .cache import get_bootstrap, compute_team_fdr
 from .fpl_data import get_fpl_data
+from .forecast import get_forecast_data
 
 TEAM_ID = os.getenv("FPL_TEAM_ID", "1897520")
+
+# ---------- Helpers ----------
 
 def _get_last_gameweek_points(player_id: int) -> int:
     try:
@@ -23,32 +29,39 @@ def _get_last_gameweek_points(player_id: int) -> int:
         pass
     return 0
 
+
 def _get_fpl_team(manager_id: str):
     try:
-        base = "https://fantasy.premierleague.com/api/"
-        bootstrap = requests.get(f"{base}bootstrap-static/", timeout=15).json()
-        elements = bootstrap["elements"]
+        data = get_bootstrap()
+        elements = data["elements"]
         player_map = {p["id"]: p for p in elements}
-        teams = {t["id"]: t["name"] for t in bootstrap["teams"]}
+        teams = {t["id"]: t["name"] for t in data["teams"]}
         positions = {1: "GK", 2: "DEF", 3: "MID", 4: "FWD"}
 
-        current_gw = next((gw["id"] for gw in bootstrap["events"] if gw["is_current"]), None)
-        if not current_gw:  # gÃ¼venlik
-            current_gw = max([gw["id"] for gw in bootstrap["events"] if gw["is_next"] or gw["finished"]], default=1)
+        events = data.get("events", [])
+        current_gw = next((gw["id"] for gw in events if gw["is_current"]), None)
+        if not current_gw:
+            current_gw = max(
+                [gw["id"] for gw in events if gw.get("is_next") or gw.get("finished")],
+                default=1,
+            )
 
-        picks = requests.get(f"{base}entry/{manager_id}/event/{current_gw}/picks/", timeout=15).json()
+        picks_resp = requests.get(
+            f"https://fantasy.premierleague.com/api/entry/{manager_id}/event/{current_gw}/picks/",
+            timeout=15,
+        )
+        picks = picks_resp.json()
         if "picks" not in picks:
             return []
 
-        out = []
+        out_base = []
         for pick in picks["picks"]:
             player = player_map.get(pick["element"])
             if not player:
                 continue
             photo_id = str(player["photo"]).split(".")[0]
             photo = f"https://resources.premierleague.com/premierleague/photos/players/250x250/p{photo_id}.png"
-
-            out.append({
+            out_base.append({
                 "ID": player["id"],
                 "web_name": player["web_name"],
                 "name": f"{player['first_name']} {player['second_name']}",
@@ -56,41 +69,105 @@ def _get_fpl_team(manager_id: str):
                 "position": positions.get(player["element_type"], "N/A"),
                 "now_cost": round(player["now_cost"] / 10.0, 1),
                 "points": int(player["total_points"]),
-                "last_gw_points": _get_last_gameweek_points(player["id"]),
+                "last_gw_points": 0,  # filled in below
                 "is_captain": pick.get("is_captain", False),
                 "is_vice_captain": pick.get("is_vice_captain", False),
                 "photo": photo,
-                
                 "starting": pick["position"] <= 11,
             })
-        out.sort(key=lambda x: (not x["starting"], -x["last_gw_points"]))
-        return out
+
+        # Fetch last-GW points for all players in parallel
+        with ThreadPoolExecutor(max_workers=15) as pool:
+            futures = {
+                pool.submit(_get_last_gameweek_points, entry["ID"]): i
+                for i, entry in enumerate(out_base)
+            }
+            for future in as_completed(futures):
+                idx = futures[future]
+                out_base[idx]["last_gw_points"] = future.result()
+
+        out_base.sort(key=lambda x: (not x["starting"], -x["last_gw_points"]))
+        return out_base
     except Exception:
         return []
 
+
 # ---------- Views ----------
+
 def index(request):
     return render(request, "fpldash/index.html")
 
+
 def api_myteam(request):
     return JsonResponse(_get_fpl_team(TEAM_ID), safe=False)
+
 
 def api_data(request):
     df = get_fpl_data()
     return JsonResponse(df.to_dict(orient="records"), safe=False)
 
+
 def api_suggestions(request):
-    # Basit sabit Ã¶neriler; sonra akÄ±llandÄ±rÄ±labilir
-    suggestions = [
-        {"name": "Cole Palmer", "team": "Chelsea", "position": "MID", "reason": "In-form & good fixtures"},
-        {"name": "Anthony Gordon", "team": "Newcastle", "position": "MID", "reason": "Consistent returns"},
-        {"name": "Evan Ferguson", "team": "Brighton", "position": "FWD", "reason": "Budget forward"},
-    ]
-    return JsonResponse(suggestions, safe=False)
+    """
+    Return top-3 value picks per position based on form, PPG, price, and
+    fixture difficulty (FDR) for the next 3 gameweeks.
+
+    Score = (form×0.6 + ppg×0.4) × (6 - fdr) / price
+    A lower FDR (easier fixture) raises the score; a higher price lowers it.
+    """
+    try:
+        data = get_bootstrap()
+        elements = data["elements"]
+        teams = {t["id"]: t["name"] for t in data["teams"]}
+        positions = {1: "GK", 2: "DEF", 3: "MID", 4: "FWD"}
+
+        team_fdr = compute_team_fdr(data, n_gws=3)
+
+        scored = []
+        for e in elements:
+            price = e.get("now_cost", 0) / 10.0
+            if price <= 0:
+                continue
+            form = float(e.get("form") or 0)
+            ppg = float(e.get("points_per_game") or 0)
+            team_id = e.get("team")
+            fdr = team_fdr.get(team_id, 3.0)
+            # Clamp FDR bonus so score stays positive
+            fdr_bonus = max(6.0 - fdr, 0.5)
+            score = (form * 0.6 + ppg * 0.4) * fdr_bonus / price
+
+            scored.append({
+                "name": e.get("web_name"),
+                "team": teams.get(team_id, ""),
+                "position": positions.get(e.get("element_type"), ""),
+                "price": round(price, 1),
+                "form": round(form, 1),
+                "ppg": round(ppg, 1),
+                "total_points": int(e.get("total_points") or 0),
+                "fdr_next3": fdr,
+                "score": round(score, 3),
+            })
+
+        result = []
+        for pos in ("GK", "DEF", "MID", "FWD"):
+            top3 = sorted(
+                (p for p in scored if p["position"] == pos),
+                key=lambda x: -x["score"],
+            )[:3]
+            for p in top3:
+                p["reason"] = (
+                    f"Form {p['form']} | PPG {p['ppg']} | "
+                    f"FDR {p['fdr_next3']} | \u00a3{p['price']}m"
+                )
+                result.append(p)
+
+        return JsonResponse(result, safe=False)
+    except Exception as ex:
+        return JsonResponse({"error": str(ex)}, status=500)
+
 
 def api_forecast(request):
     try:
-        # Limit can be overridden via query param, default 50
         try:
             limit = int(request.GET.get("limit", 50))
         except ValueError:
@@ -99,6 +176,7 @@ def api_forecast(request):
         return JsonResponse(data, safe=False)
     except Exception as ex:
         return JsonResponse({"error": str(ex)}, status=500)
+
 
 def api_player_summary(request, player_id: int):
     try:
@@ -115,10 +193,8 @@ def api_player_summary(request, player_id: int):
     except Exception as ex:
         return JsonResponse({"error": str(ex)}, status=502)
 
-from datetime import datetime, timedelta, timezone
-import re
-import xml.etree.ElementTree as ET
 
+# ---------- Twitter / price-change helpers ----------
 
 def _fetch_tweets_via_api(username: str, days: int = 7):
     token = os.getenv("TWITTER_BEARER_TOKEN")
@@ -155,21 +231,30 @@ def _fetch_tweets_via_api(username: str, days: int = 7):
             out.append({
                 "created_at": t.get("created_at"),
                 "text": t.get("text"),
-                "url": f"https://x.com/{username}/status/{t.get('id')}"
+                "url": f"https://x.com/{username}/status/{t.get('id')}",
             })
         return out
     except Exception:
         return None
 
 
-essy_profile_re = re.compile(r"<time[^>]+datetime=\"([^\"]+)\"[\s\S]*?</time>[\s\S]*?<p class=\"timeline-Tweet-text\"[^>]*>([\s\S]*?)</p>")
+_essy_profile_re = re.compile(
+    r"<time[^>]+datetime=\"([^\"]+)\"[\s\S]*?</time>"
+    r"[\s\S]*?<p class=\"timeline-Tweet-text\"[^>]*>([\s\S]*?)</p>"
+)
+
 
 def _strip_html(s: str) -> str:
-    return re.sub(r"<[^>]+>", " ", s or "").replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">").strip()
+    return (
+        re.sub(r"<[^>]+>", " ", s or "")
+        .replace("&amp;", "&")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .strip()
+    )
 
 
 def _fetch_tweets_via_syndication(username: str, days: int = 7):
-    # Unofficial syndication endpoint used by embeds; HTML parsing fallback
     try:
         resp = requests.get(
             f"https://cdn.syndication.twimg.com/widgets/timelines/profile?screen_name={username}",
@@ -179,7 +264,7 @@ def _fetch_tweets_via_syndication(username: str, days: int = 7):
             return None
         j = resp.json()
         body = j.get("body") or j.get("body_html") or ""
-        items = essy_profile_re.findall(body)
+        items = _essy_profile_re.findall(body)
         cutoff = datetime.utcnow() - timedelta(days=days)
         out = []
         for dt_str, html in items:
@@ -200,7 +285,6 @@ def _fetch_tweets_via_syndication(username: str, days: int = 7):
 
 
 def _fetch_tweets_via_nitter(username: str, days: int = 7):
-    """Fetch recent posts via public Nitter RSS mirrors (no auth)."""
     mirrors = [
         "https://nitter.net",
         "https://nitter.poast.org",
@@ -219,9 +303,8 @@ def _fetch_tweets_via_nitter(username: str, days: int = 7):
             channel = root.find("channel")
             if channel is None:
                 continue
-            items = channel.findall("item")
             out = []
-            for it in items:
+            for it in channel.findall("item"):
                 title = (it.findtext("title") or "").strip()
                 link = (it.findtext("link") or "").strip()
                 pub = it.findtext("pubDate") or ""
@@ -250,25 +333,17 @@ def api_pricechanges(request):
     except (TypeError, ValueError):
         days = 7
     days = max(1, min(days, 30))
-
-    # Prefer official API when token is present
     data = _fetch_tweets_via_api(username, days)
     if not data:
-        # try Nitter RSS mirrors (no auth)
         data = _fetch_tweets_via_nitter(username, days)
     if not data:
-        # fallback to syndication parsing
         data = _fetch_tweets_via_syndication(username, days) or []
-
     return JsonResponse(data, safe=False)
+
 
 def api_pricechanges_fpl(request):
     try:
-        # Use official FPL bootstrap-static to derive price changes
-        base = "https://fantasy.premierleague.com/api/bootstrap-static/"
-        resp = requests.get(base, timeout=20)
-        resp.raise_for_status()
-        data = resp.json()
+        data = get_bootstrap()
         elements = data.get("elements", [])
         teams = {t["id"]: t["name"] for t in data.get("teams", [])}
         positions = {1: "GK", 2: "DEF", 3: "MID", 4: "FWD"}
@@ -276,10 +351,18 @@ def api_pricechanges_fpl(request):
         out = []
         for e in elements:
             now_cost = e.get("now_cost", 0) / 10.0
-            change_event = e.get("cost_change_event", 0) / 10.0 if e.get("cost_change_event") is not None else 0.0
-            change_start = e.get("cost_change_start", 0) / 10.0 if e.get("cost_change_start") is not None else 0.0
+            change_event = (
+                e.get("cost_change_event", 0) / 10.0
+                if e.get("cost_change_event") is not None
+                else 0.0
+            )
+            change_start = (
+                e.get("cost_change_start", 0) / 10.0
+                if e.get("cost_change_start") is not None
+                else 0.0
+            )
             if change_event == 0:
-                continue  # show only players who changed price within current event window
+                continue
             out.append({
                 "Player": e.get("web_name"),
                 "Team": teams.get(e.get("team")),
@@ -290,7 +373,6 @@ def api_pricechanges_fpl(request):
                 "Status": "Riser" if change_event > 0 else "Faller",
             })
 
-        # Sort risers first then fallers by magnitude
         out.sort(key=lambda x: (x["Status"] != "Riser", -abs(x["Change_Event"]), x["Player"]))
         return JsonResponse(out, safe=False)
     except Exception as ex:

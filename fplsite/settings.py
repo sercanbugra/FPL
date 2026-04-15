@@ -1,4 +1,4 @@
-﻿import os
+import os
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -12,7 +12,7 @@ SECRET_KEY = os.getenv(
 )
 DEBUG = os.getenv("DEBUG", "False").lower() == "true"
 
-# Comma-separated host list, e.g. "example.com,www.example.com"
+# Comma-separated host list via env var (e.g. "example.com,www.example.com")
 ALLOWED_HOSTS = [
     h.strip()
     for h in os.getenv("ALLOWED_HOSTS", "127.0.0.1,localhost").split(",")
@@ -46,7 +46,7 @@ ROOT_URLCONF = "fplsite.urls"
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [],  # app iÃ§i templates kullanÄ±lacak
+        "DIRS": [],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -61,7 +61,6 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "fplsite.wsgi.application"
 
-# DB gerekmiyor ama varsayÄ±lan bÄ±rakÄ±yoruz
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
@@ -75,14 +74,14 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = "/static/"
-STATICFILES_DIRS = []  # App iÃ§i static kullanÄ±lacak (fpldash/static)
-STATIC_ROOT = BASE_DIR / "staticfiles"  # prod collectstatic iÃ§in
+STATICFILES_DIRS = []
+STATIC_ROOT = BASE_DIR / "staticfiles"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # --- Security hardening for non-debug (production/CI deploy checks) ---
 if not DEBUG:
-    # Fly terminates TLS at the edge and forwards requests to the app.
+    # Fly.io terminates TLS at the edge and forwards requests to the app.
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
     SECURE_HSTS_SECONDS = int(os.getenv("SECURE_HSTS_SECONDS", "31536000"))
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
@@ -91,7 +90,4 @@ if not DEBUG:
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
 
-
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
-
-

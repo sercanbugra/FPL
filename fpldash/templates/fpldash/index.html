@@ -1,4 +1,4 @@
-﻿{% load static %}
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -10,13 +10,13 @@
   <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
   <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.1/css/buttons.dataTables.min.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.3.0/css/bootstrap.min.css">
-  <link rel="stylesheet" href="{% static 'fpldash/style.css' %}?v=2">
+  <link rel="stylesheet" href="{% static 'fpldash/style.css' %}?v=3">
 </head>
 
 <body>
   <div class="main-container" id="mainContainer">
 
-    <!-- LEFT PANEL -->
+    <!-- LEFT PANEL: My Team -->
     <div id="my-team">
       <h3>My FPL Team</h3>
       <div id="team-list"><p>Loading your team...</p></div>
@@ -30,7 +30,7 @@
 
       <!-- TOP: FPL TABLE -->
       <div id="stats-section">
-        <h2>FPL Top Players (Dynamic Table)</h2>
+        <h2>FPL Top Players</h2>
         <div id="table-container">
           <table id="fplTable" class="display table table-striped">
             <thead><tr></tr></thead>
@@ -55,11 +55,55 @@
       </div>
     </div>
 
-    <!-- RIGHT RAIL: FPL Price Changes (X/Twitter) -->
-    <!-- Simple embedded timeline for @fplpricechanges -->
+    <!-- RIGHT RAIL: tabbed between Price Changes and Smart Picks -->
     <div id="social-rail">
-      <h3>Price Changes</h3>
-      <div id="twitter-fallback" style="display:none;"></div>
+      <!-- Tab header -->
+      <ul class="nav nav-tabs nav-fill mb-2" id="railTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+          <button class="nav-link active" id="tab-price-btn"
+                  data-bs-toggle="tab" data-bs-target="#tab-price"
+                  type="button" role="tab">Price Changes</button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="tab-picks-btn"
+                  data-bs-toggle="tab" data-bs-target="#tab-picks"
+                  type="button" role="tab">Smart Picks</button>
+        </li>
+      </ul>
+
+      <div class="tab-content" id="railTabContent">
+        <!-- Price Changes tab -->
+        <div class="tab-pane fade show active" id="tab-price" role="tabpanel">
+          <div id="twitter-fallback"></div>
+        </div>
+
+        <!-- Smart Picks tab -->
+        <div class="tab-pane fade" id="tab-picks" role="tabpanel">
+          <p class="text-muted small mb-1">Top value picks by position based on form, PPG, price &amp; fixture difficulty.</p>
+          <div id="smart-picks-list"><p>Loading...</p></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Polygon Filter Panel (full-width, below main layout) -->
+  <div id="polygon-panel">
+    <div class="polygon-header" id="polygonToggle">
+      <span>&#9650; Polygon Player Filter</span>
+      <small class="text-muted ms-2">Select 3-6 metrics, drag points on the radar to set thresholds</small>
+    </div>
+    <div id="polygon-body">
+      <div class="polygon-controls">
+        <div class="metric-options" id="metricOptions">
+          <!-- Metric checkboxes injected by JS after data loads -->
+          <span class="text-muted">Loading metrics…</span>
+        </div>
+        <button id="drawPolygonBtn" class="btn btn-primary btn-sm mt-2">Draw Polygon</button>
+      </div>
+      <div class="polygon-chart-wrap">
+        <canvas id="radarChart"></canvas>
+      </div>
+      <div id="suggestion-list" class="polygon-results"></div>
     </div>
   </div>
 
@@ -89,77 +133,103 @@
   <script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.print.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <!-- Twitter/X widgets for embedded timeline -->
+
+  <!-- Polygon / Radar feature -->
+  <script src="{% static 'fpldash/polygon.js' %}?v=2"></script>
+
   <script>
-    window.addEventListener('load', function(){
-      
-      // Backend fallback: fetch last 7 days and render simple list if embed blocked
-      function linkifyTwitterText(text) {
-        if (!text) return '';
-        let t = text;
-        // URLs
-        t = t.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" rel="noopener">$1<\/a>');
-        // Mentions
-        t = t.replace(/(^|\s)@([A-Za-z0-9_]{1,15})/g, '$1<a href="https://twitter.com/$2" target="_blank" rel="noopener">@$2<\/a>');
-        // Hashtags
-        t = t.replace(/(^|\s)#([A-Za-z0-9_]+)/g, '$1<a href="https://twitter.com/hashtag/$2" target="_blank" rel="noopener">#$2<\/a>');
-        return t;
-      }
+    // ================== PRICE CHANGES ==================
+    function linkifyTwitterText(text) {
+      if (!text) return '';
+      let t = text;
+      t = t.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
+      t = t.replace(/(^|\s)@([A-Za-z0-9_]{1,15})/g, '$1<a href="https://twitter.com/$2" target="_blank" rel="noopener">@$2</a>');
+      t = t.replace(/(^|\s)#([A-Za-z0-9_]+)/g, '$1<a href="https://twitter.com/hashtag/$2" target="_blank" rel="noopener">#$2</a>');
+      return t;
+    }
 
-      async function loadPriceChangesFallback(){
-        try {
-          const res = await fetch('/api/pricechanges?days=7');
-          if (!res.ok) return;
-          const data = await res.json();
-          if (!Array.isArray(data) || data.length === 0) return;
-          const fb = document.getElementById('twitter-fallback');
-          fb.style.display = 'block';
-          fb.innerHTML = '';
-          const username = 'fplpricechanges';
-          data.forEach(item => {
+    async function loadPriceChangesFromFPL() {
+      try {
+        const res = await fetch('/api/pricechanges_fpl');
+        if (!res.ok) return false;
+        const rows = await res.json();
+        if (!Array.isArray(rows) || rows.length === 0) return false;
+        const fb = document.getElementById('twitter-fallback');
+        fb.innerHTML = '';
+        const title = document.createElement('p');
+        title.innerHTML = '<strong>Latest Price Changes (FPL API)</strong>';
+        fb.appendChild(title);
+        rows.forEach(p => {
+          const div = document.createElement('div');
+          div.className = 'player-card';
+          const change = (p.Change_Event > 0 ? '+' : '') + p.Change_Event.toFixed(1);
+          div.innerHTML = `<div>
+            <div><strong>${p.Player}</strong> <small>(${p.Team} | ${p.Position})</small></div>
+            <div>Price: £${p.Price}m</div>
+            <div>Status: <span style="color:${p.Status==='Riser'?'#28a745':'#dc3545'}">${p.Status} ${change}m</span></div>
+            <div>Since Start: ${p.Change_Since_Start.toFixed(1)}m</div>
+          </div>`;
+          fb.appendChild(div);
+        });
+        return true;
+      } catch (e) { return false; }
+    }
+
+    async function loadPriceChangesFallback() {
+      try {
+        const res = await fetch('/api/pricechanges?days=7');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!Array.isArray(data) || data.length === 0) return;
+        const fb = document.getElementById('twitter-fallback');
+        fb.innerHTML = '';
+        const username = 'fplpricechanges';
+        data.forEach(item => {
+          const div = document.createElement('div');
+          div.className = 'player-card';
+          const d = new Date(item.created_at);
+          const when = isNaN(d) ? '' : d.toLocaleString();
+          const text = linkifyTwitterText(item.text || '');
+          const link = item.url || `https://x.com/${username}`;
+          div.innerHTML = `<div><small>${when}</small><div style="margin:4px 0;">${text}</div><div><a href="${link}" target="_blank" rel="noopener">View on X</a></div></div>`;
+          fb.appendChild(div);
+        });
+      } catch (e) { /* ignore */ }
+    }
+
+    // ================== SMART PICKS ==================
+    async function loadSmartPicks() {
+      const container = document.getElementById('smart-picks-list');
+      try {
+        const res = await fetch('/api/suggestions');
+        if (!res.ok) { container.innerHTML = '<p class="text-danger">Failed to load picks.</p>'; return; }
+        const picks = await res.json();
+        if (!Array.isArray(picks) || picks.length === 0) { container.innerHTML = '<p>No picks available.</p>'; return; }
+
+        container.innerHTML = '';
+        const posOrder = ['GK', 'DEF', 'MID', 'FWD'];
+        posOrder.forEach(pos => {
+          const group = picks.filter(p => p.position === pos);
+          if (!group.length) return;
+          const hdr = document.createElement('p');
+          hdr.innerHTML = `<strong>${pos}</strong>`;
+          container.appendChild(hdr);
+          group.forEach(p => {
             const div = document.createElement('div');
             div.className = 'player-card';
-            const d = new Date(item.created_at);
-            const when = isNaN(d) ? '' : d.toLocaleString();
-            const text = linkifyTwitterText(item.text || '');
-            const link = item.url || `https://x.com/${username}`;
-            div.innerHTML = `<div><small>${when}</small><div style="margin:4px 0;">${text}</div><div><a href="${link}" target="_blank" rel="noopener">View on X</a></div></div>`;
-            fb.appendChild(div);
+            const fdrColor = p.fdr_next3 <= 2 ? '#28a745' : p.fdr_next3 >= 4 ? '#dc3545' : '#fd7e14';
+            div.innerHTML = `<div>
+              <strong>${p.name}</strong> <small>(${p.team})</small><br>
+              <small>£${p.price}m | Form: ${p.form} | PPG: ${p.ppg}</small><br>
+              <small>FDR Next 3: <span style="color:${fdrColor};font-weight:bold">${p.fdr_next3}</span></small>
+            </div>`;
+            container.appendChild(div);
           });
-        } catch (e) {
-          // ignore
-        }
+        });
+      } catch (e) {
+        container.innerHTML = '<p class="text-danger">Error loading picks.</p>';
       }
-      loadPriceChangesFromFPL().then(ok => { if (!ok) { loadPriceChangesFallback(); } });
-    });
-  </script>
-
-  <script>      async function loadPriceChangesFromFPL(){
-        try {
-          const res = await fetch('/api/pricechanges_fpl');
-          if (!res.ok) return false;
-          const rows = await res.json();
-          if (!Array.isArray(rows) || rows.length === 0) return false;
-          const fb = document.getElementById('twitter-fallback');
-          fb.style.display = 'block';
-          fb.innerHTML = '';
-          const title = document.createElement('p');
-          title.innerHTML = '<strong>Latest Price Changes (FPL API)</strong>';
-          fb.appendChild(title);
-          rows.forEach(p => {
-            const div = document.createElement('div');
-            div.className = 'player-card';
-            const change = (p.Change_Event > 0 ? '+' : '') + p.Change_Event.toFixed(1);
-            div.innerHTML = `<div><div><strong>${p.Player}</strong> <small>(${p.Team} | ${p.Position})</small></div>
-              <div>Price: £${p.Price}m</div>
-              <div>Status: <span style="color:${p.Status==='Riser'?'#28a745':'#dc3545'}">${p.Status} ${change}m</span></div>
-              <div>Since Start: ${p.Change_Since_Start.toFixed(1)}m</div></div>`;
-            fb.appendChild(div);
-          });
-          return true;
-        } catch (e) { return false; }
-      }
-    let weeklyChart = null;
+    }
 
     // ================== PANEL RESIZERS ==================
     function setupResizablePanels() {
@@ -169,7 +239,6 @@
       const topRight = document.getElementById("stats-section");
       const vResizer = document.getElementById("resizerVertical");
       const hResizer = document.getElementById("resizerHorizontal");
-
       let activeResizer = null;
 
       vResizer.addEventListener("mousedown", (e) => {
@@ -177,36 +246,56 @@
         document.body.style.cursor = "col-resize";
         e.preventDefault();
       });
-
       hResizer.addEventListener("mousedown", (e) => {
         activeResizer = "horizontal";
         document.body.style.cursor = "row-resize";
         e.preventDefault();
       });
-
       window.addEventListener("mousemove", (e) => {
         if (!activeResizer) return;
-
         if (activeResizer === "vertical") {
-          const containerWidth = container.offsetWidth;
-          const leftWidth = e.clientX / containerWidth * 100;
-          if (leftWidth > 10 && leftWidth < 40) {
-            left.style.flex = `0 0 ${leftWidth}%`;
-          }
-        } else if (activeResizer === "horizontal") {
-          const rightRect = right.getBoundingClientRect();
-          const yOffset = e.clientY - rightRect.top;
-          const rightHeight = right.offsetHeight;
-          const topPercent = (yOffset / rightHeight) * 100;
-          if (topPercent > 20 && topPercent < 80) {
-            topRight.style.flex = `0 0 ${topPercent}%`;
-          }
+          const leftWidth = e.clientX / container.offsetWidth * 100;
+          if (leftWidth > 10 && leftWidth < 40) left.style.flex = `0 0 ${leftWidth}%`;
+        } else {
+          const yOffset = e.clientY - right.getBoundingClientRect().top;
+          const topPercent = (yOffset / right.offsetHeight) * 100;
+          if (topPercent > 20 && topPercent < 80) topRight.style.flex = `0 0 ${topPercent}%`;
         }
       });
-
       window.addEventListener("mouseup", () => {
         activeResizer = null;
         document.body.style.cursor = "default";
+      });
+    }
+
+    // ================== POLYGON PANEL TOGGLE ==================
+    function setupPolygonToggle() {
+      const toggle = document.getElementById('polygonToggle');
+      const body = document.getElementById('polygon-body');
+      let open = false;
+      body.style.display = 'none';
+      toggle.addEventListener('click', () => {
+        open = !open;
+        body.style.display = open ? 'flex' : 'none';
+        toggle.querySelector('span').textContent = (open ? '▼' : '▲') + ' Polygon Player Filter';
+      });
+    }
+
+    // ================== POLYGON METRIC CHECKBOXES ==================
+    function buildMetricCheckboxes(sampleRow) {
+      const numericCols = [
+        'Total Points', 'Median', 'Avg', 'xG Points', 'Appearances',
+        'Goals', 'Assists', 'Goals per App', 'Assists per App',
+        'Discip Index', 'Price (GBP m)', 'FDR Next 3',
+      ];
+      const container = document.getElementById('metricOptions');
+      container.innerHTML = '';
+      numericCols.forEach(col => {
+        if (!(col in sampleRow)) return;
+        const label = document.createElement('label');
+        label.className = 'metric-checkbox';
+        label.innerHTML = `<input type="checkbox" value="${col}"> ${col}`;
+        container.appendChild(label);
       });
     }
 
@@ -225,7 +314,6 @@
       const startersHeader = document.createElement('h4');
       startersHeader.textContent = "Starting XI";
       teamDiv.appendChild(startersHeader);
-
       starters.forEach(p => {
         const playerDiv = document.createElement('div');
         playerDiv.classList.add('player-card');
@@ -242,7 +330,6 @@
       const benchHeader = document.createElement('h4');
       benchHeader.textContent = "Bench";
       teamDiv.appendChild(benchHeader);
-
       bench.forEach(p => {
         const playerDiv = document.createElement('div');
         playerDiv.classList.add('player-card');
@@ -260,33 +347,32 @@
       // --- FPL TABLE ---
       const dataResponse = await fetch('/api/data');
       const fplData = await dataResponse.json();
-      const columns = Object.keys(fplData[0]).map(key => ({ data: key, title: key.replace(/_/g, ' ') }));
+
+      // PlayerId and PlayerPhoto are internal — hide from the visible table
+      const hiddenCols = new Set(['PlayerId', 'PlayerPhoto']);
+      const columns = Object.keys(fplData[0]).map(key => ({
+        data: key,
+        title: key.replace(/_/g, ' '),
+        visible: !hiddenCols.has(key),
+      }));
 
       const headerRow = $('#fplTable thead tr');
       headerRow.empty();
-      columns.forEach(col => headerRow.append(`<th>${col.title}</th>`));
+      columns.forEach(col => { if (col.visible !== false) headerRow.append(`<th>${col.title}</th>`); });
 
-      if ($.fn.dataTable.isDataTable('#fplTable')) {
-        $('#fplTable').DataTable().destroy();
-      }
+      if ($.fn.dataTable.isDataTable('#fplTable')) $('#fplTable').DataTable().destroy();
 
-      // Add filters
       $('#fplTable thead').append('<tr class="filters"></tr>');
       const filterRow = $('#fplTable thead tr.filters');
       filterRow.empty();
-
       columns.forEach(col => {
+        if (col.visible === false) return;
         if (col.title === "Position") {
           const uniquePositions = [...new Set(fplData.map(p => p.Position))];
           const options = uniquePositions.map(v => `<option value="${v}">${v}</option>`).join('');
-          filterRow.append(`
-            <th>
-              <select style="width:100%; font-size:11px;">
-                <option value="">All</option>${options}
-              </select>
-            </th>`);
+          filterRow.append(`<th><select style="width:100%;font-size:11px;"><option value="">All</option>${options}</select></th>`);
         } else {
-          filterRow.append(`<th><input type="text" placeholder="Filter ${col.title}" style="width:100%; font-size:11px;"></th>`);
+          filterRow.append(`<th><input type="text" placeholder="Filter ${col.title}" style="width:100%;font-size:11px;"></th>`);
         }
       });
 
@@ -300,27 +386,30 @@
         buttons: ['copy', 'csv', 'excel', 'print'],
         orderCellsTop: true,
         createdRow: function (row, data) {
-          if (myTeamSet && myTeamSet.has(data.Player)) {
-            $(row).addClass('in-my-team');
-          }
+          if (myTeamSet && myTeamSet.has(data.Player)) $(row).addClass('in-my-team');
         },
         initComplete: function () {
           const api = this.api();
-          api.columns().every(function (i) {
+          // Offset filter row index to account for hidden columns
+          let visibleIndex = 0;
+          columns.forEach((col, colIdx) => {
+            if (col.visible === false) return;
+            const i = visibleIndex++;
             $('input, select', filterRow.children().eq(i)).on('keyup change clear', function () {
-              if (api.column(i).search() !== this.value) {
-                api.column(i).search(this.value).draw();
-              }
+              if (api.column(colIdx).search() !== this.value) api.column(colIdx).search(this.value).draw();
             });
           });
         }
       });
 
-      // === CLICK ROW ===
+      // Row click → player modal
       $('#fplTable tbody').on('click', 'tr', async function () {
         const data = table.row(this).data();
-        await showPlayerModal(data);
+        if (data) await showPlayerModal(data);
       });
+
+      // Build polygon metric checkboxes once data is loaded
+      buildMetricCheckboxes(fplData[0]);
     }
 
     // ================== MODAL DETAILS ==================
@@ -328,8 +417,9 @@
       const detailsDiv = document.getElementById('modal-player-details');
       detailsDiv.innerHTML = '';
 
-      const photoURL = player.PlayerPhoto
-        ? `https://resources.premierleague.com/premierleague/photos/players/250x250/p${player.PlayerPhoto}.png`
+      const photoSlug = player.PlayerPhoto;
+      const photoURL = photoSlug
+        ? `https://resources.premierleague.com/premierleague/photos/players/250x250/p${photoSlug}.png`
         : 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
 
       const card = document.createElement('div');
@@ -338,37 +428,37 @@
         <img src="${photoURL}" onerror="this.src='https://cdn-icons-png.flaticon.com/512/149/149071.png'">
         <div>
           <h5>${player.Player}</h5>
-          <small>${player.Team} | ${player.Position}</small>
+          <small>${player.Team} | ${player.Position} | £${player['Price (GBP m)']}m</small><br>
+          <small>FDR Next 3: <strong>${player['FDR Next 3']}</strong></small>
         </div>
       `;
 
-      // Build weekly points table for the selected player
       const header = document.createElement('p');
       header.classList.add('mb-2');
       header.innerHTML = '<strong>Weekly Points</strong>';
 
       const tbl = document.createElement('table');
       tbl.classList.add('table', 'table-sm', 'table-bordered', 'mt-2');
-      const thead = document.createElement('thead');
-      thead.innerHTML = '<tr><th>GW</th><th>Points</th></tr>';
-      tbl.appendChild(thead);
+      tbl.appendChild(Object.assign(document.createElement('thead'), { innerHTML: '<tr><th>GW</th><th>Points</th></tr>' }));
       const tbody = document.createElement('tbody');
 
-      const playerId = player.PlayerId || player.id || player.ID;
+      const playerId = player.PlayerId;
       try {
         if (!playerId) throw new Error('Missing player id');
         const res = await fetch(`/api/player-summary/${playerId}`);
         const data = await res.json();
-        const history = (data.history || []).sort((a,b) => a.round - b.round);
-        history.forEach(gw => {
-          const tr = document.createElement('tr');
-          tr.innerHTML = `<td>GW ${gw.round}</td><td>${gw.total_points}</td>`;
-          tbody.appendChild(tr);
-        });
+        const history = (data.history || []).sort((a, b) => a.round - b.round);
+        if (history.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="2">No history yet</td></tr>';
+        } else {
+          history.forEach(gw => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td>GW ${gw.round}</td><td>${gw.total_points}</td>`;
+            tbody.appendChild(tr);
+          });
+        }
       } catch (e) {
-        const tr = document.createElement('tr');
-        tr.innerHTML = '<td colspan="2">Failed to load weekly points</td>';
-        tbody.appendChild(tr);
+        tbody.innerHTML = '<tr><td colspan="2">Failed to load weekly points</td></tr>';
       }
       tbl.appendChild(tbody);
 
@@ -376,8 +466,7 @@
       detailsDiv.appendChild(header);
       detailsDiv.appendChild(tbl);
 
-      const modal = new bootstrap.Modal(document.getElementById('playerModal'));
-      modal.show();
+      new bootstrap.Modal(document.getElementById('playerModal')).show();
     }
 
     // ================== FORECAST TABLE ==================
@@ -385,63 +474,54 @@
       try {
         const res = await fetch('/api/forecast');
         if (!res.ok) {
-          const msg = `Failed to load forecast (status ${res.status})`;
-          document.getElementById('forecastError').textContent = msg;
+          document.getElementById('forecastError').textContent = `Failed to load forecast (status ${res.status})`;
           document.getElementById('forecastError').style.display = 'block';
           return;
         }
         const forecast = await res.json();
-        if (forecast.length > 0) {
-          const cols = Object.keys(forecast[0]).map(k => ({ data: k, title: k.replace(/_/g, ' ') }));
-          const header = $('#forecastTable thead tr');
-          header.empty();
-          cols.forEach(c => header.append(`<th>${c.title}</th>`));
-          if ($.fn.dataTable.isDataTable('#forecastTable')) {
-            $('#forecastTable').DataTable().destroy();
-          }
-          // Add filters row
-          $('#forecastTable thead').append('<tr class="filters"></tr>');
-          const filterRow = $('#forecastTable thead tr.filters');
-          filterRow.empty();
-          cols.forEach(col => {
-            if (col.title === 'Position') {
-              const uniquePositions = [...new Set(forecast.map(p => p.Position))];
-              const options = uniquePositions.map(v => `<option value="${v}">${v}</option>`).join('');
-              filterRow.append(`
-                <th>
-                  <select style="width:100%; font-size:11px;">
-                    <option value="">All</option>${options}
-                  </select>
-                </th>`);
-            } else {
-              filterRow.append(`<th><input type="text" placeholder="Filter ${col.title}" style="width:100%; font-size:11px;"></th>`);
-            }
-          });
-
-          const fTable = $('#forecastTable').DataTable({
-            data: forecast,
-            columns: cols,
-            pageLength: 10,
-            responsive: true,
-            autoWidth: false,
-            dom: 'Bfrtip',
-            buttons: ['copy', 'csv', 'excel', 'print'],
-            orderCellsTop: true,
-            initComplete: function () {
-              const api = this.api();
-              api.columns().every(function (i) {
-                $('input, select', filterRow.children().eq(i)).on('keyup change clear', function () {
-                  if (api.column(i).search() !== this.value) {
-                    api.column(i).search(this.value).draw();
-                  }
-                });
-              });
-            }
-          });
-        } else {
+        if (!forecast.length) {
           document.getElementById('forecastError').textContent = 'No forecast data available';
           document.getElementById('forecastError').style.display = 'block';
+          return;
         }
+
+        const cols = Object.keys(forecast[0]).map(k => ({ data: k, title: k.replace(/_/g, ' ') }));
+        const header = $('#forecastTable thead tr');
+        header.empty();
+        cols.forEach(c => header.append(`<th>${c.title}</th>`));
+        if ($.fn.dataTable.isDataTable('#forecastTable')) $('#forecastTable').DataTable().destroy();
+
+        $('#forecastTable thead').append('<tr class="filters"></tr>');
+        const filterRow = $('#forecastTable thead tr.filters');
+        filterRow.empty();
+        cols.forEach(col => {
+          if (col.title === 'Position') {
+            const uniquePositions = [...new Set(forecast.map(p => p.Position))];
+            const options = uniquePositions.map(v => `<option value="${v}">${v}</option>`).join('');
+            filterRow.append(`<th><select style="width:100%;font-size:11px;"><option value="">All</option>${options}</select></th>`);
+          } else {
+            filterRow.append(`<th><input type="text" placeholder="Filter ${col.title}" style="width:100%;font-size:11px;"></th>`);
+          }
+        });
+
+        $('#forecastTable').DataTable({
+          data: forecast,
+          columns: cols,
+          pageLength: 10,
+          responsive: true,
+          autoWidth: false,
+          dom: 'Bfrtip',
+          buttons: ['copy', 'csv', 'excel', 'print'],
+          orderCellsTop: true,
+          initComplete: function () {
+            const api = this.api();
+            api.columns().every(function (i) {
+              $('input, select', filterRow.children().eq(i)).on('keyup change clear', function () {
+                if (api.column(i).search() !== this.value) api.column(i).search(this.value).draw();
+              });
+            });
+          }
+        });
       } catch (e) {
         document.getElementById('forecastError').textContent = 'Error loading forecast: ' + e;
         document.getElementById('forecastError').style.display = 'block';
@@ -449,18 +529,14 @@
     }
 
     // ================== INIT ==================
-    window.onload = function() {
+    window.onload = function () {
       setupResizablePanels();
+      setupPolygonToggle();
       loadData();
       loadForecast();
+      loadPriceChangesFromFPL().then(ok => { if (!ok) loadPriceChangesFallback(); });
+      loadSmartPicks();
     };
   </script>
 </body>
 </html>
-
-
-
-
-
-
-

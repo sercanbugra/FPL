@@ -282,6 +282,82 @@ table.dataTable tbody td {
   font-size: 11px;
   padding: 2px;
 }
+/* ====== Polygon Filter Panel ====== */
+#polygon-panel {
+  background: #fff;
+  border-top: 4px solid #007bff;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 200;
+  box-shadow: 0 -2px 8px rgba(0,0,0,0.12);
+}
+
+.polygon-header {
+  background: #007bff;
+  color: #fff;
+  padding: 6px 14px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.polygon-header:hover {
+  background: #0056b3;
+}
+
+#polygon-body {
+  display: flex;
+  flex-direction: row;
+  gap: 16px;
+  padding: 12px 16px;
+  max-height: 340px;
+  overflow: hidden;
+}
+
+.polygon-controls {
+  flex: 0 0 220px;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.metric-options {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.metric-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.polygon-chart-wrap {
+  flex: 0 0 280px;
+  height: 280px;
+  position: relative;
+}
+
+.polygon-results {
+  flex: 1 1 auto;
+  overflow-y: auto;
+}
+
+.polygon-results .player-card {
+  padding: 6px 8px;
+  margin-bottom: 5px;
+}
+
 /* ====== Bottom-right logo ====== */
 #bottom-logo {
   position: fixed;
@@ -296,4 +372,4 @@ table.dataTable tbody td {
 
 #bottom-logo:hover {
   opacity: 1;
-}
+}

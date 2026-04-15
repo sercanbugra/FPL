@@ -1,26 +1,46 @@
+"""
+Next-GW forecast builder.
+
+Performance notes
+-----------------
+* Uses the shared bootstrap-static cache (30-min TTL) for base data.
+* Per-player element-summary calls are executed in parallel with
+  ThreadPoolExecutor, reducing wall-clock time from ~N×0.5 s to
+  roughly max(individual latency) ≈ 1-2 s for 50 players.
+"""
+
 import requests
-import pandas as pd
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Dict
+
+import pandas as pd
+
+from .cache import get_bootstrap
+
+
+def _fetch_player_history(player_id: int) -> tuple[int, list]:
+    """Return (player_id, history_list) or (player_id, []) on failure."""
+    try:
+        url = f"https://fantasy.premierleague.com/api/element-summary/{player_id}/"
+        r = requests.get(url, timeout=12)
+        if r.status_code == 200:
+            return player_id, r.json().get("history") or []
+    except Exception:
+        pass
+    return player_id, []
 
 
 def get_forecast_data(limit: int = 50) -> List[Dict]:
     """
-    Build a compact forecast table with weekly columns like:
-    Player, Team, Position, W1..Wn, Pred_LightGBM, Pred_XGBoost, Predicted_Avg
+    Build a compact forecast table with columns:
+      Player, Team, Position, W1..Wn, Last GW Pts, Form Score, PPG Score, Predicted Score
 
-    Notes:
-    - Uses bootstrap-static for base data (fast, single call).
-    - Computes a lightweight heuristic standing in for the two models:
-        Pred_LightGBM = form
-        Pred_XGBoost  = points_per_game
-        Predicted_Avg = (Pred_LightGBM + Pred_XGBoost) / 2
-    - Fetches per-player weekly points only for the top `limit` players
-      to keep network overhead reasonable.
+    Column naming is honest:
+      Form Score      = weighted (0.7 × form + 0.3 × last-GW points)
+      PPG Score       = weighted (0.6 × points_per_game + 0.4 × last-GW points)
+      Predicted Score = (Form Score + PPG Score) / 2
     """
-    base_bs = "https://fantasy.premierleague.com/api/bootstrap-static/"
-    r = requests.get(base_bs, timeout=20)
-    r.raise_for_status()
-    data = r.json()
+    data = get_bootstrap()
 
     elements = data["elements"]
     teams = {t["id"]: t["name"] for t in data["teams"]}
@@ -34,7 +54,6 @@ def get_forecast_data(limit: int = 50) -> List[Dict]:
             latest_gw = ev.get("id")
             break
     if latest_gw is None:
-        # fallback: max finished or next
         ids = [ev.get("id") for ev in events if ev.get("finished") or ev.get("is_next")]
         latest_gw = max(ids) if ids else 1
 
@@ -49,32 +68,33 @@ def get_forecast_data(limit: int = 50) -> List[Dict]:
     df["Team"] = df["team"].map(teams)
     df["Position"] = df["element_type"].map(positions)
 
-    # Initial heuristic predictions (will be refined with last finished GW points)
-    df["Pred_LightGBM"] = df["form"]
-    df["Pred_XGBoost"] = df["points_per_game"]
-    df["Predicted_Avg"] = (df["Pred_LightGBM"] + df["Pred_XGBoost"]) / 2.0
+    # Initial scores (refined below after fetching last-GW actuals)
+    df["Form Score"] = df["form"]
+    df["PPG Score"] = df["points_per_game"]
+    df["Predicted Score"] = (df["Form Score"] + df["PPG Score"]) / 2.0
 
-    # Select top N to enrich with weekly history
-    top = df.sort_values("Predicted_Avg", ascending=False).head(limit).copy()
+    top = df.sort_values("Predicted Score", ascending=False).head(limit).copy()
     top["Player"] = top["web_name"]
 
-    # Initialize weekly columns W1..Wn with blanks
     week_cols = [f"W{i}" for i in range(1, int(latest_gw) + 1)]
     for col in week_cols:
         top[col] = ""
-    top["Last_GW_Points"] = 0.0
+    top["Last GW Pts"] = 0.0
 
-    # Fetch weekly totals for each selected player
-    for idx, row in top.iterrows():
-        pid = int(row["id"])
-        try:
-            u = f"https://fantasy.premierleague.com/api/element-summary/{pid}/"
-            pr = requests.get(u, timeout=12)
-            if pr.status_code != 200:
+    # --- Parallel fetch of per-player weekly history ---
+    pid_to_idx = {int(row["id"]): idx for idx, row in top.iterrows()}
+
+    with ThreadPoolExecutor(max_workers=20) as pool:
+        futures = {
+            pool.submit(_fetch_player_history, pid): pid
+            for pid in pid_to_idx
+        }
+        for future in as_completed(futures):
+            pid, history = future.result()
+            idx = pid_to_idx.get(pid)
+            if idx is None:
                 continue
-            js = pr.json()
-            hist = js.get("history") or []
-            for h in hist:
+            for h in history:
                 rnd = h.get("round")
                 pts = h.get("total_points")
                 if isinstance(rnd, int) and 1 <= rnd <= latest_gw:
@@ -84,29 +104,18 @@ def get_forecast_data(limit: int = 50) -> List[Dict]:
                     and isinstance(rnd, int)
                     and rnd == last_finished_gw
                 ):
-                    top.at[idx, "Last_GW_Points"] = float(pts or 0.0)
-        except Exception:
-            continue
+                    top.at[idx, "Last GW Pts"] = float(pts or 0.0)
 
-    # Refine predictions by including the last finished GW points
-    # This ensures the most recent completed week directly affects prediction output.
-    top["Pred_LightGBM"] = (0.7 * top["form"]) + (0.3 * top["Last_GW_Points"])
-    top["Pred_XGBoost"] = (0.6 * top["points_per_game"]) + (0.4 * top["Last_GW_Points"])
-    top["Predicted_Avg"] = (top["Pred_LightGBM"] + top["Pred_XGBoost"]) / 2.0
+    # Refine scores using the most recently completed GW points
+    top["Form Score"] = (0.7 * top["form"] + 0.3 * top["Last GW Pts"]).round(2)
+    top["PPG Score"] = (0.6 * top["points_per_game"] + 0.4 * top["Last GW Pts"]).round(2)
+    top["Predicted Score"] = ((top["Form Score"] + top["PPG Score"]) / 2.0).round(2)
+    top["Last GW Pts"] = top["Last GW Pts"].round(2)
 
-    # Re-sort with updated predictions
-    top = top.sort_values("Predicted_Avg", ascending=False).copy()
+    top = top.sort_values("Predicted Score", ascending=False).copy()
 
-    # Round predictions for readability
-    top["Last_GW_Points"] = top["Last_GW_Points"].round(2)
-    top["Pred_LightGBM"] = top["Pred_LightGBM"].round(2)
-    top["Pred_XGBoost"] = top["Pred_XGBoost"].round(2)
-    top["Predicted_Avg"] = top["Predicted_Avg"].round(2)
-
-    # Final column order
     cols = ["Player", "Team", "Position"] + week_cols + [
-        "Pred_LightGBM", "Pred_XGBoost", "Predicted_Avg"
+        "Last GW Pts", "Form Score", "PPG Score", "Predicted Score"
     ]
     present = [c for c in cols if c in top.columns]
-    out = top[present]
-    return out.to_dict(orient="records")
+    return top[present].to_dict(orient="records")
