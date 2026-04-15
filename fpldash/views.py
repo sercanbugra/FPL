@@ -143,6 +143,7 @@ def api_suggestions(request):
                 "price": round(price, 1),
                 "form": round(form, 1),
                 "ppg": round(ppg, 1),
+                "predicted_score": round((form + ppg) / 2, 2),
                 "total_points": int(e.get("total_points") or 0),
                 "fdr_next3": fdr,
                 "score": round(score, 3),

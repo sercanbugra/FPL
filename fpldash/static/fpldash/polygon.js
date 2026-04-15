@@ -1,8 +1,11 @@
 let radarChart = null;
 let allPlayers = [];
 let selectedMetrics = [];
-let thresholdValues = [];
+let thresholdValues = [];   // normalized 0-100 per axis
+let metricStats = [];        // {max, avg} per metric
 let draggingIndex = null;
+
+const HANDLE_RADIUS = 18;   // px — hit-test tolerance for each dot
 
 async function fetchFplData() {
   const response = await fetch("/api/data");
@@ -22,42 +25,43 @@ async function handleDrawPolygon() {
   ).map((i) => i.value);
 
   if (selectedMetrics.length < 3) {
-    alert("En az 3 metrik seçmelisin!");
+    alert("Please select at least 3 metrics!");
     return;
   }
   if (selectedMetrics.length > 6) {
-    alert("En fazla 6 metrik seçebilirsin!");
+    alert("Please select at most 6 metrics!");
     return;
   }
 
-  const ctx = document.getElementById("radarChart").getContext("2d");
-
-  // Ortalama değerleri al
-  const metricMeans = selectedMetrics.map((m) => {
-    const validValues = allPlayers.map((p) => parseFloat(p[m])).filter((v) => !isNaN(v));
-    const avg = validValues.reduce((a, b) => a + b, 0) / validValues.length;
-    return avg || 0;
+  // Per-metric max and mean (used for normalization and initial thresholds)
+  metricStats = selectedMetrics.map((m) => {
+    const vals = allPlayers.map((p) => parseFloat(p[m])).filter((v) => !isNaN(v));
+    const max = vals.length ? Math.max(...vals) : 1;
+    const avg = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
+    return { max: max || 1, avg };
   });
 
-  thresholdValues = [...metricMeans]; // başlangıçta ortalamalarla başla
+  // Start thresholds at the per-metric mean, expressed as a 0-100 percentage
+  thresholdValues = metricStats.map((s) => Math.min(100, (s.avg / s.max) * 100));
 
+  const ctx = document.getElementById("radarChart").getContext("2d");
   if (radarChart) radarChart.destroy();
 
   radarChart = new Chart(ctx, {
     type: "radar",
     data: {
       labels: selectedMetrics,
-      datasets: [
-        {
-          label: "Thresholds",
-          data: thresholdValues,
-          fill: true,
-          backgroundColor: "rgba(0,123,255,0.2)",
-          borderColor: "#007bff",
-          pointBackgroundColor: "#007bff",
-          pointRadius: 8,
-        },
-      ],
+      datasets: [{
+        label: "Thresholds",
+        data: [...thresholdValues],
+        fill: true,
+        backgroundColor: "rgba(37,99,235,0.18)",
+        borderColor: "#2563eb",
+        pointBackgroundColor: "#2563eb",
+        pointHoverBackgroundColor: "#1d4ed8",
+        pointRadius: 8,
+        pointHoverRadius: 11,
+      }],
     },
     options: {
       responsive: true,
@@ -67,83 +71,113 @@ async function handleDrawPolygon() {
         legend: { display: false },
         title: {
           display: true,
-          text: "Interaktif Radar — Noktaları sürükle, oyuncuları filtrele",
+          text: "Drag the dots to filter players",
+          color: "#94a3b8",
+          font: { size: 12 },
         },
+        tooltip: { enabled: false },
       },
       scales: {
         r: {
           min: 0,
-          ticks: { display: true },
-          grid: { color: "#ccc" },
-          angleLines: { color: "#aaa" },
+          max: 100,
+          ticks: {
+            display: true,
+            stepSize: 25,
+            callback: (v) => v + "%",
+            color: "#64748b",
+            backdropColor: "transparent",
+          },
+          grid: { color: "rgba(148,163,184,0.3)" },
+          angleLines: { color: "rgba(148,163,184,0.5)" },
+          pointLabels: { font: { size: 11 }, color: "#e2e8f0" },
         },
       },
-      events: ["mousemove", "mousedown", "mouseup", "mouseout"],
-      onHover: (e, elements) => {
-        const canvas = e.chart.canvas;
-        canvas.style.cursor = elements.length ? "grab" : "default";
-      },
+      // Disable built-in click/hover element detection — we handle it ourselves
+      events: ["mousemove", "mousedown", "mouseup", "mouseleave"],
+      onHover: () => {},
       onClick: () => {},
     },
   });
 
-  // === MOUSE EVENTS ===
+  // ── DRAG INTERACTION ──────────────────────────────────────
   const canvas = radarChart.canvas;
 
   canvas.addEventListener("mousedown", (event) => {
-    const points = radarChart.getElementsAtEventForMode(
-      event,
-      "nearest",
-      { intersect: true },
-      true
-    );
-    if (points.length) {
-      draggingIndex = points[0].index;
-      canvas.style.cursor = "grabbing";
+    const { offsetX: ox, offsetY: oy } = event;
+    const scale = radarChart.scales.r;
+
+    for (let i = 0; i < thresholdValues.length; i++) {
+      // getPointPosition(index, distanceFromCenter) → {x, y} in canvas pixels
+      const pct = thresholdValues[i] / 100;
+      const pos = scale.getPointPosition(i, pct * scale.drawingArea);
+      if (Math.hypot(ox - pos.x, oy - pos.y) <= HANDLE_RADIUS) {
+        draggingIndex = i;
+        canvas.style.cursor = "grabbing";
+        event.preventDefault();
+        break;
+      }
     }
   });
 
   canvas.addEventListener("mousemove", (event) => {
-    if (draggingIndex === null) return;
-
+    const { offsetX: ox, offsetY: oy } = event;
     const scale = radarChart.scales.r;
-    const y = scale.getValueForPixel(event.offsetY);
-    const clamped = Math.max(scale.min, Math.min(scale.max, y));
-    thresholdValues[draggingIndex] = clamped;
-    radarChart.data.datasets[0].data = thresholdValues;
-    radarChart.update("none");
 
+    if (draggingIndex === null) {
+      // Update cursor to "grab" when hovering over a handle
+      let onHandle = false;
+      for (let i = 0; i < thresholdValues.length; i++) {
+        const pct = thresholdValues[i] / 100;
+        const pos = scale.getPointPosition(i, pct * scale.drawingArea);
+        if (Math.hypot(ox - pos.x, oy - pos.y) <= HANDLE_RADIUS) {
+          onHandle = true;
+          break;
+        }
+      }
+      canvas.style.cursor = onHandle ? "grab" : "default";
+      return;
+    }
+
+    // Distance from chart centre → new 0-100 value
+    const dist = Math.hypot(ox - scale.xCenter, oy - scale.yCenter);
+    const newVal = Math.min(100, Math.max(0, (dist / scale.drawingArea) * 100));
+
+    thresholdValues[draggingIndex] = newVal;
+    radarChart.data.datasets[0].data = [...thresholdValues];
+    radarChart.update("none");
     filterPlayersByThreshold();
   });
 
   canvas.addEventListener("mouseup", () => {
     draggingIndex = null;
-    canvas.style.cursor = "grab";
+    canvas.style.cursor = "default";
   });
 
-  canvas.addEventListener("mouseout", () => {
+  canvas.addEventListener("mouseleave", () => {
     draggingIndex = null;
+    canvas.style.cursor = "default";
   });
 
-  filterPlayersByThreshold(); // ilk yüklemede de filtrele
+  filterPlayersByThreshold();
 }
 
-// Filtreleme fonksiyonu
+// ── FILTER & RENDER ────────────────────────────────────────
 function filterPlayersByThreshold() {
   if (!selectedMetrics.length) return;
 
   const suggestionsDiv = document.getElementById("suggestion-list");
   suggestionsDiv.innerHTML = "";
 
-  // Oyuncu eşiğin altına düşmeyenleri bul
-  const filtered = allPlayers.filter((p) => {
-    return selectedMetrics.every((m, i) => {
+  // Denormalize thresholds back to raw metric units before comparing
+  const filtered = allPlayers.filter((p) =>
+    selectedMetrics.every((m, i) => {
       const val = parseFloat(p[m]);
-      return !isNaN(val) && val >= thresholdValues[i];
-    });
-  });
+      const threshold = (thresholdValues[i] / 100) * metricStats[i].max;
+      return !isNaN(val) && val >= threshold;
+    })
+  );
 
-  // Çok fazla olmasın diye ilk 10
   const top = filtered
     .sort((a, b) => b["Total Points"] - a["Total Points"])
     .slice(0, 10);
@@ -157,12 +191,12 @@ function filterPlayersByThreshold() {
     const div = document.createElement("div");
     div.classList.add("player-card");
     div.innerHTML = `
-      <img src="https://resources.premierleague.com/premierleague/photos/players/250x250/p${p.PlayerPhoto || '99999'}.png"
+      <img src="https://resources.premierleague.com/premierleague/photos/players/250x250/p${p.PlayerPhoto || "99999"}.png"
            onerror="this.src='https://cdn-icons-png.flaticon.com/512/149/149071.png'">
       <div>
         <strong>${p.Player}</strong><br>
         <small>${p.Team} | ${p.Position}</small><br>
-        <small style="color:#007bff;">Points: ${p["Total Points"]}</small>
+        <small style="color:#2563eb;">Points: ${p["Total Points"]}</small>
       </div>`;
     suggestionsDiv.appendChild(div);
   });
