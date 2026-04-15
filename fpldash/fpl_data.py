@@ -35,6 +35,9 @@ def get_fpl_data() -> pd.DataFrame:
 
     df["Appearances"] = (df["minutes"] / 90).round(0).astype(int)
 
+    # Players with 0 appearances have no meaningful FDR — mark as N/A
+    df.loc[df["Appearances"] == 0, "FDR Next 3"] = None
+
     df["Median Points"] = df["points_per_game"].astype(float)
     df["Weighted Avg Points"] = (
         df["form"].astype(float) * 0.7

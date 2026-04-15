@@ -115,8 +115,7 @@ def get_forecast_data(limit: int = 50) -> List[Dict]:
 
     top = top.sort_values("Predicted Score", ascending=False).copy()
 
-    cols = ["Player", "Team", "Position"] + week_cols + [
-        "Last GW Pts", "Form Score", "PPG Score", "Predicted Score"
-    ]
+    cols = ["Player", "Team", "Position",
+            "Last GW Pts", "Form Score", "PPG Score", "Predicted Score"] + week_cols
     present = [c for c in cols if c in top.columns]
     return top[present].to_dict(orient="records")

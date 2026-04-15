@@ -241,6 +241,32 @@ async function loadMyTeam() {
   }
 }
 
+// ── COLUMN HEADER TOOLTIPS ─────────────────────────────────
+const COL_TIPS = {
+  'Player':          'Player display name',
+  'Team':            'Premier League club',
+  'Position':        'Playing position: GK / DEF / MID / FWD',
+  'Price (GBP m)':   'Current FPL price in millions (£)',
+  'FDR':             'Average Fixture Difficulty Rating for the next 3 gameweeks (1 = easy, 5 = hard). Blank when player has 0 appearances.',
+  'FDR Next 3':      'Average Fixture Difficulty Rating for the next 3 gameweeks (1 = easy, 5 = hard). Blank when player has 0 appearances.',
+  'Total Points':    'Total FPL points scored this season',
+  'Median':          'Points per game (PPG) as reported by FPL',
+  'Avg':             'Weighted average points: 70% form + 30% PPG',
+  'xG Points':       'Expected goal contributions: xG × position goal-pts + xA × 3',
+  'Appearances':     'Approximate full matches played (minutes ÷ 90, rounded)',
+  'Goals':           'Total goals scored this season',
+  'Assists':         'Total assists this season',
+  'Goals per App':   'Goals scored per appearance',
+  'Assists per App': 'Assists per appearance',
+  'Y Cards':         'Yellow cards received this season',
+  'R Cards':         'Red cards received this season',
+  'Discip Index':    'Discipline index: yellow cards + 3 × red cards (higher = worse)',
+  'Last GW Pts':     'Points scored in the most recently completed gameweek',
+  'Form Score':      'Weighted form: 70% FPL form rating + 30% last GW points',
+  'PPG Score':       'Weighted PPG: 60% points-per-game + 40% last GW points',
+  'Predicted Score': 'Overall prediction = (Form Score + PPG Score) ÷ 2',
+};
+
 // ── FPL TABLE ──────────────────────────────────────────────
 const HIDDEN_COLS = new Set(['PlayerId', 'PlayerPhoto']);
 
@@ -261,10 +287,15 @@ async function loadStatsTable() {
     return def;
   });
 
-  // Build visible header
+  // Build visible header with tooltips
   const hdr = $('#fplTable thead tr');
   hdr.empty();
-  colDefs.forEach(c => { if (c.visible !== false) hdr.append(`<th>${c.title}</th>`); });
+  colDefs.forEach(c => {
+    if (c.visible !== false) {
+      const tip = COL_TIPS[c.title] || COL_TIPS[c.data] || '';
+      hdr.append(`<th${tip ? ` title="${tip}"` : ''}>${c.title}</th>`);
+    }
+  });
 
   // Filter row
   $('#fplTable thead').append('<tr class="filters"></tr>');
@@ -337,7 +368,10 @@ async function loadForecast() {
 
     const hdr = $('#forecastTable thead tr');
     hdr.empty();
-    colDefs.forEach(c => hdr.append(`<th>${c.title}</th>`));
+    colDefs.forEach(c => {
+      const tip = COL_TIPS[c.title] || COL_TIPS[c.data] || '';
+      hdr.append(`<th${tip ? ` title="${tip}"` : ''}>${c.title}</th>`);
+    });
     $('#forecastTable thead').append('<tr class="filters"></tr>');
     const fRow = $('#forecastTable thead tr.filters');
     fRow.empty();
