@@ -152,7 +152,7 @@ html, body {
 .sidebar-body {
   flex: 1 1 auto;
   overflow-y: auto;
-  padding: 10px;
+  padding: 0;
 }
 
 .sidebar-section-label {
@@ -227,6 +227,144 @@ html, body {
 
 /* bench players */
 .player-card.bench { opacity: 0.65; }
+
+/* ============================================================
+   PITCH VIEW  (sidebar squad display)
+   ============================================================ */
+.pitch-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.pitch {
+  flex: 1 1 auto;
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* SVG fills the pitch div exactly */
+.pitch-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* Player rows sit on top of the SVG */
+.pitch-rows {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+  padding: 6px 4px;
+}
+
+.pitch-row {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+}
+
+/* ── Player token ── */
+.ptok {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  transition: transform 0.15s;
+}
+.ptok:hover { transform: scale(1.08); }
+
+/* Bench players are translucent */
+.ptok.bench { opacity: 0.45; }
+
+.ptok-img-wrap {
+  position: relative;
+  width: 40px;
+  height: 40px;
+}
+
+.ptok-img-wrap img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid rgba(255,255,255,0.85);
+  background: #1e3a8a;
+  display: block;
+}
+
+/* Points badge — bottom-right of photo */
+.ptok-pts {
+  position: absolute;
+  bottom: -3px;
+  right: -5px;
+  background: #1e3a8a;
+  color: #fff;
+  font-size: 0.5rem;
+  font-weight: 700;
+  border-radius: 8px;
+  padding: 1px 4px;
+  border: 1px solid rgba(255,255,255,0.6);
+  line-height: 1.3;
+}
+
+/* Captain / VC badge — top-right of photo */
+.ptok-cap {
+  position: absolute;
+  top: -3px;
+  right: -5px;
+  background: #f59e0b;
+  color: #fff;
+  font-size: 0.5rem;
+  font-weight: 700;
+  border-radius: 8px;
+  padding: 1px 4px;
+  border: 1px solid rgba(255,255,255,0.6);
+  line-height: 1.3;
+}
+.ptok-cap.vc { background: #94a3b8; }
+
+/* Player name below photo */
+.ptok-name {
+  font-size: 0.55rem;
+  font-weight: 700;
+  color: #fff;
+  text-align: center;
+  max-width: 52px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.9);
+  letter-spacing: 0.01em;
+}
+
+/* ── Bench strip below the pitch ── */
+.bench-strip {
+  flex: 0 0 auto;
+  background: #0f172a;
+  padding: 5px 4px 7px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.bench-lbl {
+  font-size: 0.55rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.bench-strip .pitch-row {
+  width: 100%;
+}
 
 /* ============================================================
    RESIZER

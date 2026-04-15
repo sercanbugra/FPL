@@ -10,7 +10,7 @@
   <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
   <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.1/css/buttons.dataTables.min.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.3.0/css/bootstrap.min.css">
-  <link rel="stylesheet" href="{% static 'fpldash/style.css' %}?v=10">
+  <link rel="stylesheet" href="{% static 'fpldash/style.css' %}?v=11">
 </head>
 
 <body>
@@ -199,7 +199,7 @@ function setupResizer() {
   window.addEventListener('mouseup', () => { dragging = false; resizer.classList.remove('active'); });
 }
 
-// ── MY TEAM ────────────────────────────────────────────────
+// ── MY TEAM (PITCH VIEW) ───────────────────────────────────
 async function loadMyTeam() {
   const container = document.getElementById('team-list');
   try {
@@ -209,32 +209,87 @@ async function loadMyTeam() {
       container.innerHTML = '<p class="text-muted small p-2">No team data.</p>';
       return;
     }
-    container.innerHTML = '';
+
     const starters = players.filter(p => p.starting);
     const bench    = players.filter(p => !p.starting);
 
-    function renderSection(label, list, isBench) {
-      const hdr = document.createElement('div');
-      hdr.className = 'sidebar-section-label';
-      hdr.textContent = label;
-      container.appendChild(hdr);
-      list.forEach(p => {
-        const div = document.createElement('div');
-        div.className = 'player-card' + (isBench ? ' bench' : '');
-        const cap = p.is_captain ? '<span class="badge-c">C</span>' : p.is_vice_captain ? '<span class="badge-vc">V</span>' : '';
-        div.innerHTML = `
-          <img src="${p.photo}" onerror="this.src='https://cdn-icons-png.flaticon.com/512/149/149071.png'">
-          <div class="pc-info">
-            <div class="pc-name">${p.web_name}${cap}</div>
-            <div class="pc-sub">${p.team} · ${p.position}</div>
+    // Group starters by position
+    const byPos = { GK: [], DEF: [], MID: [], FWD: [] };
+    starters.forEach(p => { if (byPos[p.position]) byPos[p.position].push(p); });
+
+    function token(p, isBench) {
+      const capBadge = p.is_captain
+        ? '<span class="ptok-cap">C</span>'
+        : p.is_vice_captain ? '<span class="ptok-cap vc">V</span>' : '';
+      return `
+        <div class="ptok${isBench ? ' bench' : ''}">
+          <div class="ptok-img-wrap">
+            <img src="${p.photo}"
+                 onerror="this.src='https://cdn-icons-png.flaticon.com/512/149/149071.png'">
+            ${capBadge}
+            <span class="ptok-pts">${p.last_gw_points}</span>
           </div>
-          <div class="pc-pts">${p.last_gw_points}<br><span style="font-size:0.6rem;color:var(--muted);font-weight:400">pts</span></div>`;
-        container.appendChild(div);
-      });
+          <div class="ptok-name">${p.web_name}</div>
+        </div>`;
     }
 
-    renderSection('Starting XI', starters, false);
-    renderSection('Bench', bench, true);
+    function row(list, isBench) {
+      return `<div class="pitch-row">${list.map(p => token(p, isBench)).join('')}</div>`;
+    }
+
+    container.innerHTML = `
+      <div class="pitch-container">
+        <div class="pitch">
+          <!-- SVG pitch markings -->
+          <svg class="pitch-svg" viewBox="0 0 220 310" preserveAspectRatio="none"
+               xmlns="http://www.w3.org/2000/svg">
+            <!-- Alternating stripe bands -->
+            <rect width="220" height="310" fill="#2d8a1f"/>
+            <rect y="0"   width="220" height="38.75" fill="#317f1c"/>
+            <rect y="77.5"  width="220" height="38.75" fill="#317f1c"/>
+            <rect y="155"   width="220" height="38.75" fill="#317f1c"/>
+            <rect y="232.5" width="220" height="38.75" fill="#317f1c"/>
+            <!-- Field border -->
+            <rect x="10" y="10" width="200" height="290" fill="none"
+                  stroke="rgba(255,255,255,0.65)" stroke-width="1.8"/>
+            <!-- Centre line -->
+            <line x1="10" y1="155" x2="210" y2="155"
+                  stroke="rgba(255,255,255,0.65)" stroke-width="1.4"/>
+            <!-- Centre circle + dot -->
+            <circle cx="110" cy="155" r="32" fill="none"
+                    stroke="rgba(255,255,255,0.65)" stroke-width="1.4"/>
+            <circle cx="110" cy="155" r="2.2" fill="rgba(255,255,255,0.65)"/>
+            <!-- Top penalty area -->
+            <rect x="55" y="10" width="110" height="52" fill="none"
+                  stroke="rgba(255,255,255,0.65)" stroke-width="1.4"/>
+            <!-- Top goal area -->
+            <rect x="80" y="10" width="60" height="20" fill="none"
+                  stroke="rgba(255,255,255,0.65)" stroke-width="1.4"/>
+            <!-- Top penalty spot -->
+            <circle cx="110" cy="52" r="2" fill="rgba(255,255,255,0.65)"/>
+            <!-- Bottom penalty area -->
+            <rect x="55" y="248" width="110" height="52" fill="none"
+                  stroke="rgba(255,255,255,0.65)" stroke-width="1.4"/>
+            <!-- Bottom goal area -->
+            <rect x="80" y="280" width="60" height="20" fill="none"
+                  stroke="rgba(255,255,255,0.65)" stroke-width="1.4"/>
+            <!-- Bottom penalty spot -->
+            <circle cx="110" cy="258" r="2" fill="rgba(255,255,255,0.65)"/>
+          </svg>
+          <!-- Player rows overlaid on the pitch -->
+          <div class="pitch-rows">
+            ${row(byPos.FWD)}
+            ${row(byPos.MID)}
+            ${row(byPos.DEF)}
+            ${row(byPos.GK)}
+          </div>
+        </div>
+        <!-- Bench -->
+        <div class="bench-strip">
+          <span class="bench-lbl">BENCH</span>
+          <div class="pitch-row">${bench.map(p => token(p, true)).join('')}</div>
+        </div>
+      </div>`;
 
     window._myTeamSet = new Set(players.map(p => p.web_name));
   } catch(e) {
