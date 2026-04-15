@@ -13,19 +13,19 @@ class SmokeTests(TestCase):
     def test_index_page_renders(self):
         resp = self.client.get("/")
         self.assertEqual(resp.status_code, 200)
-        self.assertIn(b"FPL Top Players", resp.content)
+        self.assertIn(b"FPL Dashboard", resp.content)
 
     @override_settings(SECURE_SSL_REDIRECT=False)
-    def test_index_page_has_polygon_panel(self):
+    def test_index_page_has_polygon_tab(self):
         resp = self.client.get("/")
-        self.assertIn(b"polygon-panel", resp.content)
         self.assertIn(b"drawPolygonBtn", resp.content)
+        self.assertIn(b"radarChart", resp.content)
 
     @override_settings(SECURE_SSL_REDIRECT=False)
-    def test_index_page_has_smart_picks_tab(self):
+    def test_index_page_has_smart_picks(self):
         resp = self.client.get("/")
         self.assertIn(b"Smart Picks", resp.content)
-        self.assertIn(b"tab-picks", resp.content)
+        self.assertIn(b"smart-picks-list", resp.content)
 
 
 class CacheTests(TestCase):
