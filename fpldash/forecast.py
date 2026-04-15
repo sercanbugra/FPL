@@ -78,7 +78,8 @@ def get_forecast_data(limit: int = 50) -> List[Dict]:
 
     week_cols = [f"W{i}" for i in range(1, int(latest_gw) + 1)]
     for col in week_cols:
-        top[col] = ""
+        # Use None (object dtype) so pandas 3.x accepts int assignment later
+        top[col] = None
     top["Last GW Pts"] = 0.0
 
     # --- Parallel fetch of per-player weekly history ---
