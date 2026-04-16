@@ -6,3 +6,4 @@ gunicorn>=21.2.0
 whitenoise>=6.7.0
 numpy>=1.26.0
 scikit-learn>=1.4.0
+xgboost>=2.0.0

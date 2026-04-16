@@ -334,9 +334,11 @@ async function loadStatsTable() {
   const colDefs = Object.keys(rows[0]).map(key => {
     const def = { data: key, title: key.replace(/_/g, ' '), visible: !HIDDEN_COLS.has(key) };
     if (key === 'Position') {
-      def.render = data => posBadge(data);
+      // Return plain text for filter/sort so column search works correctly;
+      // HTML badge only for display.
+      def.render = (data, type) => type === 'display' ? posBadge(data) : data;
     } else if (key === 'FDR Next 3') {
-      def.render = data => fdrBadge(data);
+      def.render = (data, type) => type === 'display' ? fdrBadge(data) : data;
       def.title = 'FDR';
     }
     return def;

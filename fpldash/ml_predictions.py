@@ -35,6 +35,7 @@ from sklearn.ensemble import GradientBoostingRegressor, RandomForestRegressor
 from sklearn.linear_model import Ridge
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
+from xgboost import XGBRegressor
 
 from .cache import get_bootstrap
 
@@ -129,6 +130,19 @@ def _train_and_predict() -> dict:
             learning_rate=0.05,
             min_samples_leaf=5,
             random_state=42,
+        ),
+        # 4. XGBoost — regularised gradient boosting with column subsampling
+        XGBRegressor(
+            n_estimators=150,
+            max_depth=4,
+            learning_rate=0.05,
+            subsample=0.8,
+            colsample_bytree=0.8,
+            reg_alpha=0.1,
+            reg_lambda=1.0,
+            random_state=42,
+            verbosity=0,
+            n_jobs=-1,
         ),
     ]
 
