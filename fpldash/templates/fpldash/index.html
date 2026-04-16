@@ -10,7 +10,7 @@
   <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
   <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.1/css/buttons.dataTables.min.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.3.0/css/bootstrap.min.css">
-  <link rel="stylesheet" href="{% static 'fpldash/style.css' %}?v=11">
+  <link rel="stylesheet" href="{% static 'fpldash/style.css' %}?v=12">
 </head>
 
 <body>
@@ -135,7 +135,7 @@
 <script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.print.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="{% static 'fpldash/polygon.js' %}?v=3"></script>
+<script src="{% static 'fpldash/polygon.js' %}?v=4"></script>
 
 <script>
 // ── UTILS ──────────────────────────────────────────────────
@@ -302,8 +302,8 @@ const COL_TIPS = {
   'Team':            'Premier League club',
   'Position':        'Playing position: GK / DEF / MID / FWD',
   'Price (GBP m)':   'Current FPL price in millions (£)',
-  'FDR':             'Average Fixture Difficulty Rating for the next 3 gameweeks (1 = easy, 5 = hard). Blank when player has 0 appearances.',
-  'FDR Next 3':      'Average Fixture Difficulty Rating for the next 3 gameweeks (1 = easy, 5 = hard). Blank when player has 0 appearances.',
+  'FDR':             'Average Fixture Difficulty Rating for the next 3 gameweeks (1 = easy, 5 = hard)',
+  'FDR Next 3':      'Average Fixture Difficulty Rating for the next 3 gameweeks (1 = easy, 5 = hard)',
   'Total Points':    'Total FPL points scored this season',
   'Median':          'Points per game (PPG) as reported by FPL',
   'Avg':             'Weighted average points: 70% form + 30% PPG',
