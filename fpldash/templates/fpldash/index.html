@@ -10,7 +10,7 @@
   <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
   <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.1/css/buttons.dataTables.min.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.3.0/css/bootstrap.min.css">
-  <link rel="stylesheet" href="{% static 'fpldash/style.css' %}?v=12">
+  <link rel="stylesheet" href="{% static 'fpldash/style.css' %}?v=13">
 </head>
 
 <body>
@@ -111,8 +111,17 @@
   </div><!-- /app-body -->
 </div><!-- /app-shell -->
 
-<!-- Bottom logo -->
+<!-- Bottom logo (desktop only) -->
 <img id="bottom-logo" src="{% static 'fpldash/images/logo.jpg' %}" alt="Logo">
+
+<!-- Mobile bottom navigation -->
+<nav class="mobile-nav" id="mobileNav">
+  <button class="mnav-btn active" data-msec="squad">Squad</button>
+  <button class="mnav-btn"        data-msec="stats">Stats</button>
+  <button class="mnav-btn"        data-msec="forecast">Forecast</button>
+  <button class="mnav-btn"        data-msec="picks">Picks</button>
+  <button class="mnav-btn"        data-msec="polygon">Filter</button>
+</nav>
 
 <!-- Player Modal -->
 <div class="modal fade" id="playerModal" tabindex="-1" aria-hidden="true">
@@ -635,10 +644,61 @@ async function loadGwChip() {
   } catch {}
 }
 
+// ── MOBILE NAV ─────────────────────────────────────────────
+function setupMobileNav() {
+  if (!window.matchMedia('(max-width: 767px)').matches) return;
+
+  const sidebar     = document.getElementById('sidebar');
+  const mainContent = document.querySelector('.main-content');
+  const rightRail   = document.querySelector('.right-rail');
+  const btns        = document.querySelectorAll('.mnav-btn');
+
+  function showSection(sec) {
+    sidebar.classList.remove('mob-visible');
+    mainContent.classList.remove('mob-visible');
+    rightRail.classList.remove('mob-visible');
+
+    if (sec === 'squad') {
+      sidebar.classList.add('mob-visible');
+    } else if (sec === 'picks') {
+      rightRail.classList.add('mob-visible');
+    } else {
+      mainContent.classList.add('mob-visible');
+      // Activate the matching main tab
+      const tabMap = { stats: 'stats', forecast: 'forecast', polygon: 'polygon' };
+      const tabName = tabMap[sec];
+      if (tabName) {
+        document.querySelectorAll('.main-tabs .tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+        const btn = document.querySelector(`.tab-btn[data-tab="${tabName}"]`);
+        if (btn) btn.classList.add('active');
+        const pane = document.getElementById('pane-' + tabName);
+        if (pane) pane.classList.add('active');
+        if (tabName === 'stats'    && $.fn.dataTable.isDataTable('#fplTable'))
+          $('#fplTable').DataTable().columns.adjust();
+        if (tabName === 'forecast' && $.fn.dataTable.isDataTable('#forecastTable'))
+          $('#forecastTable').DataTable().columns.adjust();
+      }
+    }
+  }
+
+  // Default: show squad first
+  showSection('squad');
+
+  btns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      btns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      showSection(btn.dataset.msec);
+    });
+  });
+}
+
 // ── INIT ───────────────────────────────────────────────────
 window.onload = async function() {
   setupTabs();
   setupResizer();
+  setupMobileNav();
 
   // Load in parallel — team & table first (visible), then rest
   await loadMyTeam();
