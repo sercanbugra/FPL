@@ -355,20 +355,22 @@ async function loadStatsTable() {
     hdr.append(`<th${hide}${tip ? ` title="${tip}"` : ''}>${c.title}</th>`);
   });
 
-  // Filter row — same structure, same count; hidden cols get an empty hidden cell
+  // Filter row — each visible cell carries data-col="{ci}" so initComplete
+  // can look up the right cell by attribute instead of DOM position (which
+  // DataTables may shift after it rewrites the thead).
   $('#fplTable thead').append('<tr class="filters"></tr>');
   const fRow = $('#fplTable thead tr.filters');
   fRow.empty();
-  colDefs.forEach(c => {
+  colDefs.forEach((c, ci) => {
     if (c.visible === false) {
       fRow.append('<th style="display:none"></th>');
       return;
     }
     if (c.title === 'Position') {
       const opts = [...new Set(rows.map(r => r.Position))].map(v => `<option value="${v}">${v}</option>`).join('');
-      fRow.append(`<th><select><option value="">All</option>${opts}</select></th>`);
+      fRow.append(`<th data-col="${ci}"><select><option value="">All</option>${opts}</select></th>`);
     } else {
-      fRow.append(`<th><input type="text" placeholder="${c.title}"></th>`);
+      fRow.append(`<th data-col="${ci}"><input type="text" placeholder="${c.title}"></th>`);
     }
   });
 
@@ -392,10 +394,11 @@ async function loadStatsTable() {
     },
     initComplete() {
       const api = this.api();
-      // fRow now has one <th> per colDef (same index), so ci maps directly
-      colDefs.forEach((c, ci) => {
-        if (c.visible === false) return;
-        $('input,select', fRow.children().eq(ci)).on('keyup change', function() {
+      // Look up each filter cell by its data-col attribute — immune to any
+      // DOM rewriting DataTables does during initialisation.
+      fRow.find('th[data-col]').each(function() {
+        const ci = parseInt($(this).attr('data-col'), 10);
+        $('input,select', this).on('keyup change', function() {
           if (api.column(ci).search() !== this.value) api.column(ci).search(this.value).draw();
         });
       });
