@@ -7,6 +7,9 @@ Performance notes
 * Per-player element-summary calls are executed in parallel with
   ThreadPoolExecutor, reducing wall-clock time from ~N×0.5 s to
   roughly max(individual latency) ≈ 1-2 s for 50 players.
+* Predicted Score is the average of three ML model predictions
+  (Ridge, Random Forest, Gradient Boosting) trained on per-90 stats.
+  See ml_predictions.py for details.
 """
 
 import requests
@@ -16,6 +19,7 @@ from typing import List, Dict
 import pandas as pd
 
 from .cache import get_bootstrap
+from .ml_predictions import get_ml_predicted_scores
 
 
 def _fetch_player_history(player_id: int) -> tuple[int, list]:
@@ -33,12 +37,14 @@ def _fetch_player_history(player_id: int) -> tuple[int, list]:
 def get_forecast_data(limit: int = 50) -> List[Dict]:
     """
     Build a compact forecast table with columns:
-      Player, Team, Position, W1..Wn, Last GW Pts, Form Score, PPG Score, Predicted Score
+      Player, Team, Position, Last GW Pts, Form Score, PPG Score,
+      Predicted Score, W1..Wn
 
-    Column naming is honest:
-      Form Score      = weighted (0.7 × form + 0.3 × last-GW points)
-      PPG Score       = weighted (0.6 × points_per_game + 0.4 × last-GW points)
-      Predicted Score = (Form Score + PPG Score) / 2
+    Column definitions:
+      Form Score      = 0.7 × form + 0.3 × last-GW points
+      PPG Score       = 0.6 × points_per_game + 0.4 × last-GW points
+      Predicted Score = average of Ridge / Random Forest / Gradient
+                        Boosting predictions (see ml_predictions.py)
     """
     data = get_bootstrap()
 
@@ -46,7 +52,7 @@ def get_forecast_data(limit: int = 50) -> List[Dict]:
     teams = {t["id"]: t["name"] for t in data["teams"]}
     positions = {1: "GK", 2: "DEF", 3: "MID", 4: "FWD"}
 
-    # Determine the latest GW to display in columns (current if exists, otherwise finished/next)
+    # Determine the latest GW to display in columns
     events = data.get("events", [])
     latest_gw = None
     for ev in events:
@@ -57,7 +63,7 @@ def get_forecast_data(limit: int = 50) -> List[Dict]:
         ids = [ev.get("id") for ev in events if ev.get("finished") or ev.get("is_next")]
         latest_gw = max(ids) if ids else 1
 
-    # Last fully finished GW for using recent realized points in predictions
+    # Last fully finished GW (for Last GW Pts)
     finished_ids = [ev.get("id") for ev in events if ev.get("finished")]
     last_finished_gw = max(finished_ids) if finished_ids else None
 
@@ -68,17 +74,19 @@ def get_forecast_data(limit: int = 50) -> List[Dict]:
     df["Team"] = df["team"].map(teams)
     df["Position"] = df["element_type"].map(positions)
 
-    # Initial scores (refined below after fetching last-GW actuals)
-    df["Form Score"] = df["form"]
-    df["PPG Score"] = df["points_per_game"]
-    df["Predicted Score"] = (df["Form Score"] + df["PPG Score"]) / 2.0
+    # ── ML Predicted Score ────────────────────────────────────────────
+    # Train three models on the full player pool and take their average.
+    # Players are pre-selected by ML rank so the forecast already favours
+    # players the models rate highly — not just raw form/PPG.
+    ml_scores = get_ml_predicted_scores()
+    df["Predicted Score"] = df["id"].astype(int).map(ml_scores).fillna(0.0)
 
     top = df.sort_values("Predicted Score", ascending=False).head(limit).copy()
     top["Player"] = top["web_name"]
 
     week_cols = [f"W{i}" for i in range(1, int(latest_gw) + 1)]
     for col in week_cols:
-        # Use None (object dtype) so pandas 3.x accepts int assignment later
+        # None → object dtype so pandas 3.x accepts int assignment later
         top[col] = None
     top["Last GW Pts"] = 0.0
 
@@ -107,11 +115,13 @@ def get_forecast_data(limit: int = 50) -> List[Dict]:
                 ):
                     top.at[idx, "Last GW Pts"] = float(pts or 0.0)
 
-    # Refine scores using the most recently completed GW points
+    # Context scores (informational — Predicted Score comes from ML only)
     top["Form Score"] = (0.7 * top["form"] + 0.3 * top["Last GW Pts"]).round(2)
-    top["PPG Score"] = (0.6 * top["points_per_game"] + 0.4 * top["Last GW Pts"]).round(2)
-    top["Predicted Score"] = ((top["Form Score"] + top["PPG Score"]) / 2.0).round(2)
+    top["PPG Score"]  = (0.6 * top["points_per_game"] + 0.4 * top["Last GW Pts"]).round(2)
     top["Last GW Pts"] = top["Last GW Pts"].round(2)
+
+    # Final ML predicted score (already set; re-map in case cache refreshed)
+    top["Predicted Score"] = top["id"].astype(int).map(ml_scores).fillna(0.0).round(2)
 
     top = top.sort_values("Predicted Score", ascending=False).copy()
 

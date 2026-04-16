@@ -11,6 +11,7 @@ from django.shortcuts import render
 from .cache import get_bootstrap, compute_team_fdr
 from .fpl_data import get_fpl_data
 from .forecast import get_forecast_data
+from .ml_predictions import get_ml_predicted_scores
 
 TEAM_ID = os.getenv("FPL_TEAM_ID", "1897520")
 
@@ -122,6 +123,7 @@ def api_suggestions(request):
         positions = {1: "GK", 2: "DEF", 3: "MID", 4: "FWD"}
 
         team_fdr = compute_team_fdr(data, n_gws=3)
+        ml_scores = get_ml_predicted_scores()
 
         scored = []
         for e in elements:
@@ -132,9 +134,11 @@ def api_suggestions(request):
             ppg = float(e.get("points_per_game") or 0)
             team_id = e.get("team")
             fdr = team_fdr.get(team_id, 3.0)
-            # Clamp FDR bonus so score stays positive
+            player_id = int(e.get("id") or 0)
+            ml_pred = ml_scores.get(player_id, round((form + ppg) / 2, 2))
+            # Clamp FDR bonus so ranking score stays positive
             fdr_bonus = max(6.0 - fdr, 0.5)
-            score = (form * 0.6 + ppg * 0.4) * fdr_bonus / price
+            score = ml_pred * fdr_bonus / price
 
             scored.append({
                 "name": e.get("web_name"),
@@ -143,7 +147,7 @@ def api_suggestions(request):
                 "price": round(price, 1),
                 "form": round(form, 1),
                 "ppg": round(ppg, 1),
-                "predicted_score": round((form + ppg) / 2, 2),
+                "predicted_score": round(ml_pred, 2),
                 "total_points": int(e.get("total_points") or 0),
                 "fdr_next3": fdr,
                 "score": round(score, 3),
