@@ -18,7 +18,7 @@ from typing import List, Dict
 
 import pandas as pd
 
-from .cache import get_bootstrap
+from .cache import get_bootstrap, compute_team_fdr
 from .ml_predictions import get_ml_predicted_scores
 
 
@@ -74,6 +74,9 @@ def get_forecast_data(limit: int = 50) -> List[Dict]:
     df["Team"] = df["team"].map(teams)
     df["Position"] = df["element_type"].map(positions)
 
+    team_fdr = compute_team_fdr(data, n_gws=3)
+    df["FDR Next 3"] = df["team"].map(team_fdr).fillna(3.0).round(1)
+
     # ── ML Predicted Score ────────────────────────────────────────────
     # Train three models on the full player pool and take their average.
     # Players are pre-selected by ML rank so the forecast already favours
@@ -125,7 +128,7 @@ def get_forecast_data(limit: int = 50) -> List[Dict]:
 
     top = top.sort_values("Predicted Score", ascending=False).copy()
 
-    cols = ["Player", "Team", "Position",
+    cols = ["Player", "Team", "Position", "FDR Next 3",
             "Last GW Pts", "Form Score", "PPG Score", "Predicted Score"] + week_cols
     present = [c for c in cols if c in top.columns]
     return top[present].to_dict(orient="records")
