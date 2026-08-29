@@ -128,7 +128,7 @@ html, body {
    SIDEBAR  (My Team)
    ============================================================ */
 .sidebar {
-  flex: 0 0 220px;
+  flex: 0 0 270px;
   min-width: 160px;
   display: flex;
   flex-direction: column;
@@ -479,7 +479,8 @@ html, body {
 /* Table wrapper inside a pane */
 .table-wrap {
   flex: 1 1 auto;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
   padding: 10px;
   min-height: 0;
 }
@@ -647,20 +648,24 @@ table.dataTable {
   font-size: 12px;
   border-collapse: collapse;
   width: 100% !important;
+  table-layout: fixed;
 }
 
 table.dataTable thead th {
   background: #f8fafc;
   color: var(--text);
   font-weight: 700;
-  font-size: 0.7rem;
+  font-size: 0.64rem;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  white-space: nowrap;
-  padding: 7px 10px;
+  letter-spacing: 0.02em;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  padding: 5px 4px;
   border-bottom: 2px solid var(--border);
   border-top: none;
   text-align: center;
+  line-height: 1.15;
 }
 
 table.dataTable tbody tr {
@@ -671,9 +676,12 @@ table.dataTable tbody tr {
 table.dataTable tbody tr:hover { background: #f0f7ff; }
 
 table.dataTable tbody td {
-  padding: 6px 10px;
+  padding: 5px 4px;
   vertical-align: middle;
   text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* In-team highlight */
@@ -775,12 +783,28 @@ div.dataTables_wrapper .dataTables_paginate .paginate_button:hover {
   display: block;
 }
 
+.metric-search {
+  flex: 0 0 auto;
+  width: 100%;
+  font-size: 0.75rem;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+}
+
+.metric-search:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
 .metric-options {
   display: flex;
   flex-direction: column;
   gap: 5px;
   overflow-y: auto;
-  max-height: 100%;
+  min-height: 0;
+  flex: 1 1 auto;
 }
 
 .metric-checkbox {

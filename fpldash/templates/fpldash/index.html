@@ -10,7 +10,7 @@
   <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
   <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.1/css/buttons.dataTables.min.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.3.0/css/bootstrap.min.css">
-  <link rel="stylesheet" href="{% static 'fpldash/style.css' %}?v=16">
+  <link rel="stylesheet" href="{% static 'fpldash/style.css' %}?v=18">
 </head>
 
 <body>
@@ -85,6 +85,7 @@
           <div class="polygon-tab-body">
             <div class="polygon-controls">
               <label>Select 3–6 metrics</label>
+              <input type="text" id="metricSearch" class="metric-search" placeholder="Search metrics…">
               <div class="metric-options" id="metricOptions">
                 <div class="spinner"><div class="spin"></div></div>
               </div>
@@ -428,7 +429,7 @@ async function loadStatsTable() {
     data: rows,
     columns: colDefs,
     pageLength: 20,
-    scrollX: true,
+    scrollX: false,
     autoWidth: false,
     dom: '<"d-flex align-items-center gap-2 mb-2"Bf>rtip',
     buttons: [
@@ -745,19 +746,37 @@ async function loadSmartPicks() {
 }
 
 // ── POLYGON CHECKBOXES ─────────────────────────────────────
+const POLYGON_EXCLUDE_COLS = new Set(['PlayerId', 'PlayerPhoto', 'Player', 'Team', 'Position']);
+
 function buildPolygonCheckboxes(sample) {
-  const NUMERIC = ['Total Points','Median','Avg','xG Points','Appearances',
-    'Goals','Assists','Goals per App','Assists per App','Discip Index',
-    'Price (GBP m)','FDR Next 3'];
+  // Every numeric field from /api/data is a valid metric — no hardcoded
+  // whitelist, so new columns show up here automatically. Only identifier /
+  // text fields (name, team, position, ids) are excluded.
+  const metrics = Object.keys(sample).filter(col => {
+    if (POLYGON_EXCLUDE_COLS.has(col)) return false;
+    const v = sample[col];
+    return typeof v === 'number' || (typeof v === 'string' && v.trim() !== '' && !isNaN(parseFloat(v)));
+  });
+
   const el = document.getElementById('metricOptions');
   el.innerHTML = '';
-  NUMERIC.forEach(col => {
-    if (!(col in sample)) return;
+  metrics.forEach(col => {
     const label = document.createElement('label');
     label.className = 'metric-checkbox';
     label.innerHTML = `<input type="checkbox" value="${col}"> ${col}`;
     el.appendChild(label);
   });
+
+  const searchEl = document.getElementById('metricSearch');
+  if (searchEl && !searchEl.dataset.bound) {
+    searchEl.dataset.bound = '1';
+    searchEl.addEventListener('input', () => {
+      const q = searchEl.value.trim().toLowerCase();
+      el.querySelectorAll('.metric-checkbox').forEach(lbl => {
+        lbl.style.display = lbl.textContent.toLowerCase().includes(q) ? '' : 'none';
+      });
+    });
+  }
 }
 
 // ── GW CHIP ────────────────────────────────────────────────
