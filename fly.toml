@@ -1,21 +1,34 @@
-app = "fpl-n0-lhw"
-primary_region = "ams"
+# fly.toml app configuration file generated for fpl-tonwvq on 2026-08-29T19:42:47Z
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'fpl-tonwvq'
+primary_region = 'ams'
+console_command = '/code/manage.py shell'
+
+[build]
 
 [env]
-  PORT = "8080"
-  DJANGO_SETTINGS_MODULE = "fplsite.settings"
-  DEBUG = "False"
-  ALLOWED_HOSTS = "*,fpl-n0-lhw.fly.dev"
+  ALLOWED_HOSTS = '*,fpl-n0-lhw.fly.dev'
+  DEBUG = 'False'
+  DJANGO_SETTINGS_MODULE = 'fplsite.settings'
+  PORT = '8000'
 
 [http_service]
   internal_port = 8080
   force_https = true
-  auto_stop_machines = "stop"
+  auto_stop_machines = 'stop'
   auto_start_machines = true
   min_machines_running = 0
-  processes = ["app"]
+  processes = ['app']
 
 [[vm]]
-  memory = "1gb"
-  cpu_kind = "shared"
+  memory = '1gb'
+  cpu_kind = 'shared'
   cpus = 1
+  memory_mb = 256
+
+[[statics]]
+  guest_path = '/code/static'
+  url_prefix = '/static/'
