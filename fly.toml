@@ -1,11 +1,11 @@
-app = "fpl-n0-lhw"
+app = "fpl-tonwvq"
 primary_region = "ams"
 
 [env]
   PORT = "8080"
   DJANGO_SETTINGS_MODULE = "fplsite.settings"
   DEBUG = "False"
-  ALLOWED_HOSTS = "*,fpl-n0-lhw.fly.dev"
+  ALLOWED_HOSTS = "*,fpl-tonwvq.fly.dev"
 
 [http_service]
   internal_port = 8080
