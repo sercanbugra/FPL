@@ -10,7 +10,7 @@
   <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
   <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.1/css/buttons.dataTables.min.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.3.0/css/bootstrap.min.css">
-  <link rel="stylesheet" href="{% static 'fpldash/style.css' %}?v=18">
+  <link rel="stylesheet" href="{% static 'fpldash/style.css' %}?v=19">
 </head>
 
 <body>
@@ -270,7 +270,7 @@ async function loadMyTeam() {
         ? '<span class="ptok-cap">C</span>'
         : p.is_vice_captain ? '<span class="ptok-cap vc">V</span>' : '';
       return `
-        <div class="ptok${isBench ? ' bench' : ''}">
+        <div class="ptok${isBench ? ' bench' : ''}" data-player-id="${p.ID}">
           <div class="ptok-img-wrap">
             <img src="${p.photo}"
                  onerror="this.src='https://cdn-icons-png.flaticon.com/512/149/149071.png'">
@@ -340,9 +340,41 @@ async function loadMyTeam() {
       </div>`;
 
     window._myTeamSet = new Set(players.map(p => p.web_name));
+    window._myTeamById = new Map(players.map(p => [p.ID, p]));
+
+    if (!container.dataset.clickBound) {
+      container.dataset.clickBound = '1';
+      container.addEventListener('click', (e) => {
+        const tok = e.target.closest('.ptok');
+        if (!tok) return;
+        openMyTeamPlayerModal(parseInt(tok.dataset.playerId, 10));
+      });
+    }
   } catch(e) {
     container.innerHTML = '<p class="text-danger small p-2">Failed to load team.</p>';
   }
+}
+
+// Prefer the full stats-table row (has FDR/Avg/xG etc.); fall back to the
+// leaner squad-pick shape if stats haven't loaded yet.
+function openMyTeamPlayerModal(id) {
+  const full = window._statsById && window._statsById.get(id);
+  if (full) { showModal(full); return; }
+
+  const p = window._myTeamById && window._myTeamById.get(id);
+  if (!p) return;
+  showModal({
+    PlayerId: p.ID,
+    Player: p.name || p.web_name,
+    Position: p.position,
+    Team: p.team,
+    'Price (GBP m)': p.now_cost,
+    'FDR Next 3': 3.0,
+    'Total Points': p.points,
+    Avg: 0,
+    'xG Points': 0,
+    PlayerPhoto: null,
+  });
 }
 
 // ── COLUMN HEADER TOOLTIPS ─────────────────────────────────
@@ -378,6 +410,8 @@ async function loadStatsTable() {
   const resp = await fetch('/api/data');
   const rows = await resp.json();
   if (!rows.length) return;
+
+  window._statsById = new Map(rows.map(r => [r.PlayerId, r]));
 
   const myTeam = window._myTeamSet || new Set();
   const colDefs = Object.keys(rows[0]).map(key => {

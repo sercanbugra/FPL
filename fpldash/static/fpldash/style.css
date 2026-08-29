@@ -312,16 +312,18 @@ html, body {
   align-items: center;
   gap: 3px;
   transition: transform 0.15s;
+  cursor: pointer;
 }
-.ptok:hover { transform: scale(1.08); }
+.ptok:hover { transform: scale(1.1); }
+.ptok:hover .ptok-img-wrap img { border-color: #fbbf24; }
 
 /* Bench players are translucent */
-.ptok.bench { opacity: 0.45; }
+.ptok.bench { opacity: 0.55; }
 
 .ptok-img-wrap {
   position: relative;
-  width: 40px;
-  height: 40px;
+  width: 46px;
+  height: 46px;
 }
 
 .ptok-img-wrap img {
@@ -329,9 +331,11 @@ html, body {
   height: 100%;
   border-radius: 50%;
   object-fit: cover;
-  border: 2px solid rgba(255,255,255,0.85);
+  border: 3px solid rgba(255,255,255,0.95);
   background: #1e3a8a;
   display: block;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.35);
+  transition: border-color 0.15s;
 }
 
 /* Points badge — bottom-right of photo */
@@ -367,15 +371,15 @@ html, body {
 
 /* Player name below photo */
 .ptok-name {
-  font-size: 0.55rem;
-  font-weight: 700;
+  font-size: 0.64rem;
+  font-weight: 800;
   color: #fff;
   text-align: center;
-  max-width: 52px;
+  max-width: 58px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  text-shadow: 0 1px 3px rgba(0,0,0,0.9);
+  text-shadow: 0 1px 4px rgba(0,0,0,0.95), 0 0 2px rgba(0,0,0,0.8);
   letter-spacing: 0.01em;
 }
 
