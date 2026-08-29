@@ -12,6 +12,7 @@ from .cache import get_bootstrap, compute_team_fdr
 from .fpl_data import get_fpl_data
 from .forecast import get_forecast_data
 from .ml_predictions import get_ml_predicted_scores
+from .squad_builder import build_squads
 
 TEAM_ID = os.getenv("FPL_TEAM_ID", "1897520")
 
@@ -100,7 +101,8 @@ def index(request):
 
 
 def api_myteam(request):
-    return JsonResponse(_get_fpl_team(TEAM_ID), safe=False)
+    team_id = request.GET.get("id", "").strip() or TEAM_ID
+    return JsonResponse(_get_fpl_team(team_id), safe=False)
 
 
 def api_data(request):
@@ -173,12 +175,34 @@ def api_suggestions(request):
 
 def api_forecast(request):
     try:
-        try:
-            limit = int(request.GET.get("limit", 50))
-        except ValueError:
-            limit = 50
+        limit_param = request.GET.get("limit")
+        limit = None
+        if limit_param is not None:
+            try:
+                limit = int(limit_param)
+            except ValueError:
+                limit = None
         data = get_forecast_data(limit=limit)
         return JsonResponse(data, safe=False)
+    except Exception as ex:
+        return JsonResponse({"error": str(ex)}, status=500)
+
+
+def api_squad_builder(request):
+    """
+    Build a 15-man squad within a budget, returning several alternative
+    squads built with different selection strategies (pure predicted-points,
+    fixture-friendly, template/safe, differential, star-studded). See
+    squad_builder.py for the underlying optimisation.
+    """
+    try:
+        try:
+            budget = float(request.GET.get("budget", 100.0))
+        except (TypeError, ValueError):
+            budget = 100.0
+        budget = max(60.0, min(budget, 110.0))
+        result = build_squads(budget=budget)
+        return JsonResponse(result)
     except Exception as ex:
         return JsonResponse({"error": str(ex)}, status=500)
 

@@ -149,6 +149,42 @@ html, body {
   text-transform: uppercase;
 }
 
+/* Team ID row inside sidebar header */
+.team-id-row {
+  display: flex;
+  gap: 4px;
+  margin-top: 8px;
+}
+.team-id-row input {
+  flex: 1;
+  padding: 4px 7px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255,255,255,0.25);
+  background: rgba(255,255,255,0.1);
+  color: #fff;
+  font-size: 0.78rem;
+  outline: none;
+  text-transform: none;
+  letter-spacing: normal;
+  font-weight: normal;
+  font-family: inherit;
+}
+.team-id-row input::placeholder { color: rgba(255,255,255,0.5); }
+.team-id-row input:focus { border-color: rgba(255,255,255,0.6); background: rgba(255,255,255,0.15); }
+.team-id-row button {
+  padding: 4px 9px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: var(--primary);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-transform: none;
+  letter-spacing: normal;
+}
+.team-id-row button:hover { background: var(--primary-dark); }
+
 .sidebar-body {
   flex: 1 1 auto;
   overflow-y: auto;
@@ -494,6 +530,11 @@ html, body {
   overflow: hidden;
 }
 
+/* Only shown alongside the Player Stats tab — hidden for other tabs on desktop */
+@media (min-width: 768px) {
+  .right-rail.tab-hidden { display: none; }
+}
+
 .rail-tabs {
   flex: 0 0 auto;
   display: flex;
@@ -717,7 +758,7 @@ div.dataTables_wrapper .dataTables_paginate .paginate_button:hover {
 }
 
 .polygon-controls {
-  flex: 0 0 200px;
+  flex: 0 0 170px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -756,18 +797,142 @@ div.dataTables_wrapper .dataTables_paginate .paginate_button:hover {
 .metric-checkbox input { accent-color: var(--primary); }
 
 .polygon-chart-wrap {
-  flex: 0 0 300px;
+  flex: 1 1 auto;
   height: 100%;
-  max-height: 380px;
+  min-width: 0;
   position: relative;
 }
 
 .polygon-results {
-  flex: 1 1 auto;
+  flex: 0 0 200px;
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
 }
 
-.polygon-results .player-card { margin-bottom: 5px; }
+.polygon-results .player-card {
+  margin-bottom: 0;
+  padding: 4px 6px;
+  gap: 5px;
+}
+
+.polygon-results .player-card img {
+  width: 22px;
+  height: 22px;
+}
+
+.polygon-results .player-card strong {
+  font-size: 0.75rem;
+  line-height: 1.15;
+}
+
+.polygon-results .player-card small {
+  font-size: 0.65rem;
+  line-height: 1.2;
+}
+
+/* ============================================================
+   SQUAD BUILDER TAB
+   ============================================================ */
+.builder-toolbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-card);
+}
+
+.builder-toolbar label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
+.builder-toolbar input[type="number"] {
+  width: 90px;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+  color: var(--text);
+}
+
+.builder-hint {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.builder-wrap {
+  flex: 1 1 auto;
+  overflow: auto;
+  padding: 14px;
+  min-height: 0;
+}
+
+.builder-grid {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.squad-card {
+  flex: 0 0 300px;
+  background: var(--bg-base);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+}
+
+.squad-card-hdr {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.squad-card .sc-name {
+  font-weight: 700;
+  font-size: 0.88rem;
+  color: var(--text);
+}
+
+.squad-card .sc-formation {
+  flex-shrink: 0;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #fff;
+  background: var(--primary);
+  border-radius: 10px;
+  padding: 1px 8px;
+}
+
+.squad-card .sc-desc {
+  font-size: 0.72rem;
+  color: var(--muted);
+  line-height: 1.4;
+  margin: 4px 0 8px;
+}
+
+.squad-card .sc-stats {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.72rem;
+  color: var(--muted);
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  margin-bottom: 6px;
+}
+
+.squad-card .sc-stats b { color: var(--text); }
+.squad-card .player-card { background: #fff; }
 
 /* ============================================================
    MODAL
@@ -927,13 +1092,18 @@ div.dataTables_wrapper .dataTables_paginate .paginate_button:hover {
     flex: 0 0 auto;
   }
   .polygon-chart-wrap {
-    flex: 0 0 280px;
+    flex: 0 0 340px;
     width: 100%;
   }
   .polygon-results {
     flex: 0 0 auto;
     min-height: 180px;
     overflow-y: visible;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  .polygon-results .player-card {
+    flex: 1 1 calc(50% - 6px);
   }
 
   /* DataTables: slightly larger text & touch-friendly row height */
@@ -952,6 +1122,11 @@ div.dataTables_wrapper .dataTables_paginate .paginate_button:hover {
 
   /* Pitch container fills its section */
   .pitch-container { height: 100%; }
+
+  /* Squad builder: single-column, full-width cards */
+  .builder-toolbar { padding: 10px; }
+  .builder-grid { flex-direction: column; }
+  .squad-card { flex: 0 0 auto; width: 100%; }
 
   /* Make pick / change cards a bit more finger-friendly */
   .pick-card, .change-card { padding: 10px 12px; margin-bottom: 8px; }

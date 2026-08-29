@@ -10,7 +10,7 @@
   <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
   <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.1/css/buttons.dataTables.min.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.3.0/css/bootstrap.min.css">
-  <link rel="stylesheet" href="{% static 'fpldash/style.css' %}?v=13">
+  <link rel="stylesheet" href="{% static 'fpldash/style.css' %}?v=16">
 </head>
 
 <body>
@@ -32,7 +32,14 @@
 
     <!-- LEFT SIDEBAR: My Team -->
     <aside class="sidebar" id="sidebar">
-      <div class="sidebar-header">My Squad</div>
+      <div class="sidebar-header">
+        My Squad
+        <div class="team-id-row">
+          <input type="text" id="teamIdInput" inputmode="numeric" pattern="[0-9]*"
+                 placeholder="FPL Team ID" title="Enter your FPL manager ID">
+          <button id="teamIdBtn" onclick="applyTeamId()">Go</button>
+        </div>
+      </div>
       <div class="sidebar-body" id="team-list">
         <div class="spinner"><div class="spin"></div> Loading…</div>
       </div>
@@ -47,6 +54,7 @@
         <button class="tab-btn active" data-tab="stats">Player Stats</button>
         <button class="tab-btn"        data-tab="forecast">GW Forecast</button>
         <button class="tab-btn"        data-tab="polygon">Polygon Filter</button>
+        <button class="tab-btn"        data-tab="builder">Squad Builder</button>
       </nav>
 
       <div class="main-panes">
@@ -91,6 +99,19 @@
           </div>
         </div>
 
+        <!-- TAB 4: Squad Builder -->
+        <div class="tab-pane" id="pane-builder">
+          <div class="builder-toolbar">
+            <label for="builderBudget">Budget £m</label>
+            <input type="number" id="builderBudget" min="60" max="110" step="0.5" value="100.0">
+            <button id="builderGoBtn" class="btn btn-primary btn-sm">Build Squads</button>
+            <span class="builder-hint">5 alternative first-squad strategies, optimised for your budget.</span>
+          </div>
+          <div class="builder-wrap" id="builder-wrap">
+            <p class="text-muted small p-3">Set your budget and click "Build Squads" to generate alternative starting squads.</p>
+          </div>
+        </div>
+
       </div><!-- /main-panes -->
     </div><!-- /main-content -->
 
@@ -121,6 +142,7 @@
   <button class="mnav-btn"        data-msec="forecast">Forecast</button>
   <button class="mnav-btn"        data-msec="picks">Picks</button>
   <button class="mnav-btn"        data-msec="polygon">Filter</button>
+  <button class="mnav-btn"        data-msec="builder">Build</button>
 </nav>
 
 <!-- Player Modal -->
@@ -144,7 +166,7 @@
 <script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.print.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="{% static 'fpldash/polygon.js' %}?v=4"></script>
+<script src="{% static 'fpldash/polygon.js' %}?v=5"></script>
 
 <script>
 // ── UTILS ──────────────────────────────────────────────────
@@ -173,6 +195,8 @@ function setupTabs() {
       document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
       btn.classList.add('active');
       document.getElementById('pane-' + btn.dataset.tab).classList.add('active');
+      // Right rail (Price Changes / Smart Picks) only shows alongside Player Stats
+      document.querySelector('.right-rail').classList.toggle('tab-hidden', btn.dataset.tab !== 'stats');
       // Redraw DataTables when tab becomes visible
       if (btn.dataset.tab === 'stats' && $.fn.dataTable.isDataTable('#fplTable')) {
         $('#fplTable').DataTable().columns.adjust();
@@ -180,6 +204,7 @@ function setupTabs() {
       if (btn.dataset.tab === 'forecast' && $.fn.dataTable.isDataTable('#forecastTable')) {
         $('#forecastTable').DataTable().columns.adjust();
       }
+      if (btn.dataset.tab === 'builder') ensureBuilderLoaded();
     });
   });
   // Rail tabs
@@ -208,10 +233,24 @@ function setupResizer() {
 }
 
 // ── MY TEAM (PITCH VIEW) ───────────────────────────────────
+function applyTeamId() {
+  const val = document.getElementById('teamIdInput').value.trim();
+  if (!/^\d+$/.test(val)) return;
+  localStorage.setItem('fplTeamId', val);
+  loadMyTeam();
+}
+
 async function loadMyTeam() {
   const container = document.getElementById('team-list');
+
+  // Restore saved ID into the input
+  const savedId = localStorage.getItem('fplTeamId') || '';
+  const inputEl = document.getElementById('teamIdInput');
+  if (inputEl && savedId) inputEl.value = savedId;
+
+  const url = savedId ? `/api/myteam?id=${encodeURIComponent(savedId)}` : '/api/myteam';
   try {
-    const resp = await fetch('/api/myteam');
+    const resp = await fetch(url);
     const players = await resp.json();
     if (!Array.isArray(players) || players.length === 0) {
       container.innerHTML = '<p class="text-muted small p-2">No team data.</p>';
@@ -431,10 +470,25 @@ async function loadForecast() {
     const rows = await resp.json();
     if (!rows.length) { errEl.textContent = 'No forecast data.'; errEl.style.display='block'; return; }
 
+    const FORECAST_NUM_COLS = new Set([
+      'Last GW Pts', 'Form Score', 'PPG Score', 'Predicted Score', 'FDR Next 3',
+    ]);
     const colDefs = Object.keys(rows[0]).map(key => {
       const def = { data: key, title: key.replace(/_/g, ' ') };
-      if (key === 'Position') def.render = data => posBadge(data);
-      if (key === 'FDR Next 3') { def.render = data => fdrBadge(data); def.title = 'FDR'; }
+      // Position: plain text for sort/filter, badge for display
+      if (key === 'Position') {
+        def.render = (data, type) => type === 'display' ? posBadge(data) : data;
+      }
+      // FDR: badge for display, raw number for sort
+      if (key === 'FDR Next 3') {
+        def.render = (data, type) => type === 'display' ? fdrBadge(data) : data;
+        def.title = 'FDR';
+        def.type  = 'num';
+      }
+      // All numeric score / week columns → force numeric sort
+      if (FORECAST_NUM_COLS.has(key) || /^W\d+$/.test(key)) {
+        def.type = 'num';
+      }
       return def;
     });
 
@@ -483,6 +537,77 @@ async function loadForecast() {
     errEl.textContent = 'Error: ' + e;
     errEl.style.display = 'block';
   }
+}
+
+// ── SQUAD BUILDER ──────────────────────────────────────────
+function builderPlayerRow(p, sq, isBench) {
+  const isC   = sq.captain && sq.captain.id === p.id;
+  const isVC  = !isC && sq.vice_captain && sq.vice_captain.id === p.id;
+  const badge = isC ? '<span class="badge-c">C</span>' : isVC ? '<span class="badge-vc">VC</span>' : '';
+  const photo = p.photo || 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
+  return `
+    <div class="player-card${isBench ? ' bench' : ''}">
+      <img src="${photo}" onerror="this.src='https://cdn-icons-png.flaticon.com/512/149/149071.png'">
+      <div class="pc-info">
+        <div class="pc-name">${p.web_name}${badge ? ' ' + badge : ''}</div>
+        <div class="pc-sub">${p.team} · £${p.price}m</div>
+      </div>
+      <div class="pc-pts">${p.predicted}</div>
+    </div>`;
+}
+
+function squadCard(sq) {
+  const sections = ['GK', 'DEF', 'MID', 'FWD'].map(pos => `
+      <div class="pos-section-hdr">${pos}</div>
+      ${(sq.starters[pos] || []).map(p => builderPlayerRow(p, sq, false)).join('')}
+    `).join('');
+  const bench = `
+      <div class="pos-section-hdr">Bench</div>
+      ${sq.bench.map(p => builderPlayerRow(p, sq, true)).join('')}
+    `;
+  return `
+    <div class="squad-card">
+      <div class="squad-card-hdr">
+        <span class="sc-name">${sq.name}</span>
+        <span class="sc-formation">${sq.formation}</span>
+      </div>
+      <p class="sc-desc">${sq.description}</p>
+      <div class="sc-stats">
+        <span>Cost <b>£${sq.total_cost}m</b></span>
+        <span>Left <b>£${sq.budget_left}m</b></span>
+        <span>Pred <b>${sq.predicted_points} pts</b></span>
+      </div>
+      ${sections}
+      ${bench}
+    </div>`;
+}
+
+async function loadSquadBuilder() {
+  const wrap = document.getElementById('builder-wrap');
+  const budgetInput = document.getElementById('builderBudget');
+  let budget = parseFloat(budgetInput.value);
+  if (isNaN(budget)) budget = 100.0;
+  budget = Math.min(Math.max(budget, 60), 110);
+  budgetInput.value = budget;
+
+  wrap.innerHTML = '<div class="spinner"><div class="spin"></div> Building squads…</div>';
+  window._squadBuilderLoaded = true;
+  try {
+    const res  = await fetch(`/api/squad-builder?budget=${encodeURIComponent(budget)}`);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    if (!data.squads || !data.squads.length) {
+      wrap.innerHTML = '<p class="text-muted small p-3">No feasible squad found for this budget — try increasing it.</p>';
+      return;
+    }
+    wrap.innerHTML = `<div class="builder-grid">${data.squads.map(squadCard).join('')}</div>`;
+  } catch (e) {
+    wrap.innerHTML = `<p class="text-danger small p-3">Failed to build squads: ${e.message || e}</p>`;
+  }
+}
+
+function ensureBuilderLoaded() {
+  if (!window._squadBuilderLoaded) loadSquadBuilder();
 }
 
 // ── PLAYER MODAL ───────────────────────────────────────────
@@ -665,7 +790,7 @@ function setupMobileNav() {
     } else {
       mainContent.classList.add('mob-visible');
       // Activate the matching main tab
-      const tabMap = { stats: 'stats', forecast: 'forecast', polygon: 'polygon' };
+      const tabMap = { stats: 'stats', forecast: 'forecast', polygon: 'polygon', builder: 'builder' };
       const tabName = tabMap[sec];
       if (tabName) {
         document.querySelectorAll('.main-tabs .tab-btn').forEach(b => b.classList.remove('active'));
@@ -674,10 +799,12 @@ function setupMobileNav() {
         if (btn) btn.classList.add('active');
         const pane = document.getElementById('pane-' + tabName);
         if (pane) pane.classList.add('active');
+        rightRail.classList.toggle('tab-hidden', tabName !== 'stats');
         if (tabName === 'stats'    && $.fn.dataTable.isDataTable('#fplTable'))
           $('#fplTable').DataTable().columns.adjust();
         if (tabName === 'forecast' && $.fn.dataTable.isDataTable('#forecastTable'))
           $('#forecastTable').DataTable().columns.adjust();
+        if (tabName === 'builder') ensureBuilderLoaded();
       }
     }
   }
@@ -699,6 +826,16 @@ window.onload = async function() {
   setupTabs();
   setupResizer();
   setupMobileNav();
+
+  // Enter key on team ID input
+  const tidInput = document.getElementById('teamIdInput');
+  if (tidInput) tidInput.addEventListener('keydown', e => { if (e.key === 'Enter') applyTeamId(); });
+
+  // Squad builder controls
+  const builderGoBtn = document.getElementById('builderGoBtn');
+  if (builderGoBtn) builderGoBtn.addEventListener('click', loadSquadBuilder);
+  const builderBudget = document.getElementById('builderBudget');
+  if (builderBudget) builderBudget.addEventListener('keydown', e => { if (e.key === 'Enter') loadSquadBuilder(); });
 
   // Load in parallel — team & table first (visible), then rest
   await loadMyTeam();
