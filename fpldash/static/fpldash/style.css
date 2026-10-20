@@ -680,6 +680,7 @@ table.dataTable tbody tr {
 }
 
 table.dataTable tbody tr:hover { background: #f0f7ff; }
+#fplTable tbody tr, #forecastTable tbody tr { cursor: pointer; }
 
 table.dataTable tbody td {
   padding: 5px 4px;

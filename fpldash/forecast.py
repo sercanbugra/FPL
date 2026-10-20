@@ -155,8 +155,10 @@ def get_forecast_data(limit: Optional[int] = None) -> List[Dict]:
     if limit is not None:
         top = top.head(limit)
     top = top.copy()
+    # Hidden in the table; lets the frontend open the same player modal as Player Stats
+    top["PlayerId"] = top["id"].astype(int)
 
-    cols = ["Player", "Team", "Position", "FDR Next 3",
+    cols = ["PlayerId", "Player", "Team", "Position", "FDR Next 3",
             "Last GW Pts", "Form Score", "PPG Score", "Predicted Score"] + week_cols
     present = [c for c in cols if c in top.columns]
     return top[present].to_dict(orient="records")

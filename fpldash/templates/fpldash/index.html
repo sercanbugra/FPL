@@ -10,7 +10,7 @@
   <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
   <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.1/css/buttons.dataTables.min.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.3.0/css/bootstrap.min.css">
-  <link rel="stylesheet" href="{% static 'fpldash/style.css' %}?v=20">
+  <link rel="stylesheet" href="{% static 'fpldash/style.css' %}?v=21">
 </head>
 
 <body>
@@ -536,7 +536,8 @@ async function loadForecast() {
     const FORECAST_NUM_COLS = new Set([
       'Last GW Pts', 'Form Score', 'PPG Score', 'Predicted Score', 'FDR Next 3',
     ]);
-    const colDefs = Object.keys(rows[0]).map(key => {
+    // Hidden keys (PlayerId) stay on the row data for the click handler but get no column
+    const colDefs = Object.keys(rows[0]).filter(key => !HIDDEN_COLS.has(key)).map(key => {
       const def = { data: key, title: key.replace(/_/g, ' ') };
       // Position: plain text for sort/filter, badge for display
       if (key === 'Position') {
@@ -575,7 +576,7 @@ async function loadForecast() {
 
     if ($.fn.dataTable.isDataTable('#forecastTable')) $('#forecastTable').DataTable().destroy();
 
-    $('#forecastTable').DataTable({
+    const tbl = $('#forecastTable').DataTable({
       data: rows,
       columns: colDefs,
       pageLength: 15,
@@ -595,6 +596,26 @@ async function loadForecast() {
           });
         });
       }
+    });
+
+    // Same player modal as Player Stats: prefer the full stats row, fall back
+    // to what the forecast row knows if Player Stats hasn't loaded yet.
+    $('#forecastTable tbody').off('click').on('click', 'tr', async function() {
+      const d = tbl.row(this).data();
+      if (!d) return;
+      const full = window._statsById && window._statsById.get(d.PlayerId);
+      await showModal(full || {
+        PlayerId: d.PlayerId,
+        Player: d.Player,
+        Position: d.Position,
+        Team: d.Team,
+        'Price (GBP m)': '—',
+        'FDR Next 3': d['FDR Next 3'],
+        'Total Points': '—',
+        Avg: d['Form Score'],
+        'xG Points': '—',
+        PlayerPhoto: null,
+      });
     });
   } catch(e) {
     errEl.textContent = 'Error: ' + e;
