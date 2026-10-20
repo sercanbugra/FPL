@@ -10,7 +10,7 @@
   <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
   <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.1/css/buttons.dataTables.min.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.3.0/css/bootstrap.min.css">
-  <link rel="stylesheet" href="{% static 'fpldash/style.css' %}?v=19">
+  <link rel="stylesheet" href="{% static 'fpldash/style.css' %}?v=20">
 </head>
 
 <body>
@@ -55,6 +55,8 @@
         <button class="tab-btn"        data-tab="forecast">GW Forecast</button>
         <button class="tab-btn"        data-tab="polygon">Polygon Filter</button>
         <button class="tab-btn"        data-tab="builder">Squad Builder</button>
+        <button class="tab-btn"        data-tab="table">PL Table</button>
+        <button class="tab-btn"        data-tab="fixtures">Fixtures</button>
       </nav>
 
       <div class="main-panes">
@@ -113,6 +115,26 @@
           </div>
         </div>
 
+        <!-- TAB 5: Premier League Table -->
+        <div class="tab-pane" id="pane-table">
+          <div class="league-wrap" id="league-wrap">
+            <div class="spinner"><div class="spin"></div> Loading table…</div>
+          </div>
+        </div>
+
+        <!-- TAB 6: Gameweek Fixtures -->
+        <div class="tab-pane" id="pane-fixtures">
+          <div class="builder-toolbar fixtures-toolbar">
+            <button id="fxPrevBtn" class="btn btn-outline-secondary btn-sm" aria-label="Previous gameweek">&lsaquo;</button>
+            <span class="fx-gw-label" id="fxGwLabel">Gameweek —</span>
+            <button id="fxNextBtn" class="btn btn-outline-secondary btn-sm" aria-label="Next gameweek">&rsaquo;</button>
+            <span class="builder-hint" id="fxDeadline"></span>
+          </div>
+          <div class="fixtures-wrap" id="fixtures-wrap">
+            <div class="spinner"><div class="spin"></div> Loading fixtures…</div>
+          </div>
+        </div>
+
       </div><!-- /main-panes -->
     </div><!-- /main-content -->
 
@@ -134,7 +156,9 @@
 </div><!-- /app-shell -->
 
 <!-- Bottom logo (desktop only) -->
-<img id="bottom-logo" src="{% static 'fpldash/images/logo.jpg' %}" alt="Logo">
+<a href="https://gultechs.net/" target="_blank" rel="noopener">
+  <img id="bottom-logo" src="{% static 'fpldash/images/logo.jpg' %}" alt="Logo">
+</a>
 
 <!-- Mobile bottom navigation -->
 <nav class="mobile-nav" id="mobileNav">
@@ -144,6 +168,8 @@
   <button class="mnav-btn"        data-msec="picks">Picks</button>
   <button class="mnav-btn"        data-msec="polygon">Filter</button>
   <button class="mnav-btn"        data-msec="builder">Build</button>
+  <button class="mnav-btn"        data-msec="table">Table</button>
+  <button class="mnav-btn"        data-msec="fixtures">Fixtures</button>
 </nav>
 
 <!-- Player Modal -->
@@ -206,6 +232,8 @@ function setupTabs() {
         $('#forecastTable').DataTable().columns.adjust();
       }
       if (btn.dataset.tab === 'builder') ensureBuilderLoaded();
+      if (btn.dataset.tab === 'table') ensureLeagueTableLoaded();
+      if (btn.dataset.tab === 'fixtures') ensureFixturesLoaded();
     });
   });
   // Rail tabs
@@ -645,6 +673,124 @@ function ensureBuilderLoaded() {
   if (!window._squadBuilderLoaded) loadSquadBuilder();
 }
 
+// ── PREMIER LEAGUE TABLE ───────────────────────────────────
+function formPill(r) {
+  return `<span class="form-pill form-${r}">${r}</span>`;
+}
+
+async function loadLeagueTable() {
+  const wrap = document.getElementById('league-wrap');
+  window._leagueTableLoaded = true;
+  try {
+    const res  = await fetch('/api/table');
+    const rows = await res.json();
+    if (rows.error) throw new Error(rows.error);
+    const body = rows.map(r => `
+      <tr class="zone-${r.position <= 4 ? 'ucl' : r.position > rows.length - 3 ? 'rel' : 'mid'}">
+        <td class="lt-pos">${r.position}</td>
+        <td class="lt-team">
+          <img src="${r.badge}" alt="" onerror="this.style.visibility='hidden'">
+          <span class="lt-name">${r.name}</span><span class="lt-short">${r.short_name}</span>
+        </td>
+        <td>${r.played}</td>
+        <td class="lt-opt">${r.won}</td>
+        <td class="lt-opt">${r.drawn}</td>
+        <td class="lt-opt">${r.lost}</td>
+        <td class="lt-opt">${r.gf}</td>
+        <td class="lt-opt">${r.ga}</td>
+        <td>${r.gd > 0 ? '+' : ''}${r.gd}</td>
+        <td class="lt-pts">${r.points}</td>
+        <td class="lt-form">${r.form.map(formPill).join('')}</td>
+      </tr>`).join('');
+    wrap.innerHTML = `
+      <table class="league-table">
+        <thead><tr>
+          <th>#</th><th class="lt-team">Club</th><th>P</th>
+          <th class="lt-opt">W</th><th class="lt-opt">D</th><th class="lt-opt">L</th>
+          <th class="lt-opt">GF</th><th class="lt-opt">GA</th><th>GD</th>
+          <th>Pts</th><th class="lt-form">Last 5</th>
+        </tr></thead>
+        <tbody>${body}</tbody>
+      </table>`;
+  } catch (e) {
+    window._leagueTableLoaded = false;
+    wrap.innerHTML = `<p class="text-danger small p-3">Failed to load table: ${e.message || e}</p>`;
+  }
+}
+
+function ensureLeagueTableLoaded() {
+  if (!window._leagueTableLoaded) loadLeagueTable();
+}
+
+// ── GAMEWEEK FIXTURES ──────────────────────────────────────
+function fixtureRow(m) {
+  const ko = m.kickoff_time ? new Date(m.kickoff_time) : null;
+  const mid = m.status === 'upcoming'
+    ? `<span class="fx-time">${ko ? ko.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'TBC'}</span>`
+    : `<span class="fx-score">${m.home_score ?? 0} – ${m.away_score ?? 0}</span>`;
+  const tag = m.status === 'live'
+    ? `<span class="fx-status live">LIVE ${m.minutes}'</span>`
+    : m.status === 'finished' ? '<span class="fx-status">FT</span>' : '';
+  return `
+    <div class="fx-row">
+      <div class="fx-team home">
+        <span class="fx-name">${m.home.name || ''}</span>
+        <img src="${m.home.badge || ''}" alt="" onerror="this.style.visibility='hidden'">
+      </div>
+      <div class="fx-mid">${mid}${tag}</div>
+      <div class="fx-team away">
+        <img src="${m.away.badge || ''}" alt="" onerror="this.style.visibility='hidden'">
+        <span class="fx-name">${m.away.name || ''}</span>
+      </div>
+    </div>`;
+}
+
+async function loadFixtures(gw) {
+  const wrap = document.getElementById('fixtures-wrap');
+  window._fixturesLoaded = true;
+  wrap.innerHTML = '<div class="spinner"><div class="spin"></div> Loading fixtures…</div>';
+  try {
+    const url  = gw ? `/api/fixtures?gw=${encodeURIComponent(gw)}` : '/api/fixtures';
+    const res  = await fetch(url);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    window._fixturesGw = data.gameweek;
+    document.getElementById('fxGwLabel').textContent = data.name;
+    document.getElementById('fxPrevBtn').disabled = data.gameweek <= 1;
+    document.getElementById('fxNextBtn').disabled = data.gameweek >= data.max_gameweek;
+    document.getElementById('fxDeadline').textContent = data.deadline_time
+      ? `Deadline: ${new Date(data.deadline_time).toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}`
+      : '';
+
+    if (!data.fixtures.length) {
+      wrap.innerHTML = '<p class="text-muted small p-3">No fixtures scheduled for this gameweek.</p>';
+      return;
+    }
+    // Group by local kickoff date
+    const groups = new Map();
+    data.fixtures.forEach(m => {
+      const day = m.kickoff_time
+        ? new Date(m.kickoff_time).toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' })
+        : 'Date TBC';
+      if (!groups.has(day)) groups.set(day, []);
+      groups.get(day).push(m);
+    });
+    wrap.innerHTML = [...groups].map(([day, list]) => `
+      <div class="fx-day">
+        <div class="fx-day-hdr">${day}</div>
+        ${list.map(fixtureRow).join('')}
+      </div>`).join('');
+  } catch (e) {
+    window._fixturesLoaded = false;
+    wrap.innerHTML = `<p class="text-danger small p-3">Failed to load fixtures: ${e.message || e}</p>`;
+  }
+}
+
+function ensureFixturesLoaded() {
+  if (!window._fixturesLoaded) loadFixtures();
+}
+
 // ── PLAYER MODAL ───────────────────────────────────────────
 async function showModal(player) {
   const body = document.getElementById('modal-player-details');
@@ -843,7 +989,8 @@ function setupMobileNav() {
     } else {
       mainContent.classList.add('mob-visible');
       // Activate the matching main tab
-      const tabMap = { stats: 'stats', forecast: 'forecast', polygon: 'polygon', builder: 'builder' };
+      const tabMap = { stats: 'stats', forecast: 'forecast', polygon: 'polygon', builder: 'builder',
+                       table: 'table', fixtures: 'fixtures' };
       const tabName = tabMap[sec];
       if (tabName) {
         document.querySelectorAll('.main-tabs .tab-btn').forEach(b => b.classList.remove('active'));
@@ -858,6 +1005,8 @@ function setupMobileNav() {
         if (tabName === 'forecast' && $.fn.dataTable.isDataTable('#forecastTable'))
           $('#forecastTable').DataTable().columns.adjust();
         if (tabName === 'builder') ensureBuilderLoaded();
+        if (tabName === 'table') ensureLeagueTableLoaded();
+        if (tabName === 'fixtures') ensureFixturesLoaded();
       }
     }
   }
@@ -889,6 +1038,10 @@ window.onload = async function() {
   if (builderGoBtn) builderGoBtn.addEventListener('click', loadSquadBuilder);
   const builderBudget = document.getElementById('builderBudget');
   if (builderBudget) builderBudget.addEventListener('keydown', e => { if (e.key === 'Enter') loadSquadBuilder(); });
+
+  // Fixtures gameweek navigation
+  document.getElementById('fxPrevBtn').addEventListener('click', () => loadFixtures(window._fixturesGw - 1));
+  document.getElementById('fxNextBtn').addEventListener('click', () => loadFixtures(window._fixturesGw + 1));
 
   // Load in parallel — team & table first (visible), then rest
   await loadMyTeam();

@@ -6,6 +6,7 @@ primary_region = "ams"
   DJANGO_SETTINGS_MODULE = "fplsite.settings"
   DEBUG = "False"
   ALLOWED_HOSTS = "*,fpl-tonwvq.fly.dev"
+  FPL_TEAM_ID = "5521358"
 
 [http_service]
   internal_port = 8080

@@ -439,6 +439,8 @@ html, body {
   background: var(--bg-card);
   border-bottom: 1px solid var(--border);
   padding: 0 10px;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
 
 .main-tabs .tab-btn {
@@ -963,6 +965,153 @@ div.dataTables_wrapper .dataTables_paginate .paginate_button:hover {
 .squad-card .player-card { background: #fff; }
 
 /* ============================================================
+   PL TABLE TAB
+   ============================================================ */
+.league-wrap {
+  flex: 1 1 auto;
+  overflow: auto;
+  padding: 14px;
+  min-height: 0;
+}
+
+.league-table {
+  width: 100%;
+  max-width: 900px;
+  border-collapse: collapse;
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  font-size: 0.8rem;
+  color: var(--text);
+}
+
+.league-table th {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+  padding: 8px 6px;
+  text-align: center;
+}
+
+.league-table td {
+  padding: 7px 6px;
+  border-bottom: 1px solid var(--border);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.league-table tr:last-child td { border-bottom: none; }
+
+.league-table .lt-team { text-align: left; white-space: nowrap; }
+.league-table .lt-team img { width: 22px; height: 22px; vertical-align: middle; margin-right: 8px; }
+.league-table .lt-short { display: none; }
+.league-table .lt-pos { font-weight: 700; border-left: 3px solid transparent; }
+.league-table .lt-pts { font-weight: 700; }
+
+.league-table .zone-ucl .lt-pos { border-left-color: var(--primary); }
+.league-table .zone-rel .lt-pos { border-left-color: var(--danger); }
+
+.form-pill {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  line-height: 18px;
+  margin: 0 1px;
+  border-radius: 50%;
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: #fff;
+}
+.form-pill.form-W { background: var(--success); }
+.form-pill.form-D { background: var(--muted); }
+.form-pill.form-L { background: var(--danger); }
+
+/* ============================================================
+   FIXTURES TAB
+   ============================================================ */
+.fx-gw-label {
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: var(--text);
+  min-width: 100px;
+  text-align: center;
+}
+
+.fixtures-wrap {
+  flex: 1 1 auto;
+  overflow: auto;
+  padding: 14px;
+  min-height: 0;
+}
+
+.fx-day {
+  max-width: 700px;
+  margin-bottom: 14px;
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.fx-day-hdr {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  background: var(--bg-base);
+  border-bottom: 1px solid var(--border);
+  padding: 6px 12px;
+}
+
+.fx-row {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.82rem;
+  color: var(--text);
+}
+.fx-row:last-child { border-bottom: none; }
+
+.fx-team { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.fx-team.home { justify-content: flex-end; text-align: right; }
+.fx-team img { width: 24px; height: 24px; flex-shrink: 0; }
+.fx-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.fx-mid {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 64px;
+}
+
+.fx-score {
+  font-weight: 700;
+  font-size: 0.9rem;
+  background: var(--bg-header);
+  color: #fff;
+  border-radius: var(--radius-sm);
+  padding: 2px 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.fx-time {
+  font-weight: 600;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 2px 10px;
+}
+
+.fx-status { font-size: 0.62rem; font-weight: 700; color: var(--muted); margin-top: 2px; }
+.fx-status.live { color: var(--danger); }
+
+/* ============================================================
    MODAL
    ============================================================ */
 .modal-content { border-radius: var(--radius); border: none; box-shadow: var(--shadow-md); }
@@ -1161,6 +1310,17 @@ div.dataTables_wrapper .dataTables_paginate .paginate_button:hover {
 
   /* Header: hide brand badge on very small screens */
   .brand-badge { display: none; }
+
+  /* 8 nav sections: let the bar scroll rather than squash labels */
+  .mobile-nav { overflow-x: auto; }
+  .mnav-btn   { flex: 1 0 auto; padding: 8px 8px 6px; }
+
+  /* PL table: compact columns, short club names */
+  .league-wrap, .fixtures-wrap { padding: 8px; }
+  .league-table .lt-opt,
+  .league-table .lt-name { display: none; }
+  .league-table .lt-short { display: inline; }
+  .fx-row { gap: 6px; padding: 8px; font-size: 0.76rem; }
 }
 
 /* ============================================================

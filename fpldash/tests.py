@@ -214,3 +214,91 @@ class SquadBuilderViewTests(TestCase):
             resp = self.client.get("/api/squad-builder", {"budget": "not-a-number"})
         self.assertEqual(resp.status_code, 200)
         mock_build.assert_called_once_with(budget=100.0)
+
+
+def _league_bootstrap():
+    return {
+        "teams": [
+            {"id": 1, "name": "Arsenal", "short_name": "ARS", "code": 3},
+            {"id": 2, "name": "Chelsea", "short_name": "CHE", "code": 8},
+            {"id": 3, "name": "Liverpool", "short_name": "LIV", "code": 14},
+        ],
+        "events": [
+            {"id": 1, "name": "Gameweek 1", "is_current": False, "finished": True},
+            {"id": 2, "name": "Gameweek 2", "is_current": True, "deadline_time": "2026-08-22T10:00:00Z"},
+            {"id": 3, "name": "Gameweek 3", "is_next": True},
+        ],
+    }
+
+
+def _league_fixtures():
+    return [
+        # GW1: ARS 2-0 CHE, LIV 1-1 ARS
+        {"id": 1, "event": 1, "team_h": 1, "team_a": 2, "team_h_score": 2, "team_a_score": 0,
+         "finished": True, "started": True, "kickoff_time": "2026-08-15T14:00:00Z"},
+        {"id": 2, "event": 1, "team_h": 3, "team_a": 1, "team_h_score": 1, "team_a_score": 1,
+         "finished": True, "started": True, "kickoff_time": "2026-08-16T14:00:00Z"},
+        # GW2: CHE 3-0 LIV live (not counted), LIV v CHE upcoming
+        {"id": 3, "event": 2, "team_h": 2, "team_a": 3, "team_h_score": 3, "team_a_score": 0,
+         "finished": False, "started": True, "minutes": 60, "kickoff_time": "2026-08-23T16:30:00Z"},
+        {"id": 4, "event": 2, "team_h": 3, "team_a": 2, "team_h_score": None, "team_a_score": None,
+         "finished": False, "started": False, "kickoff_time": "2026-08-23T11:30:00Z"},
+    ]
+
+
+class LeagueTests(TestCase):
+    def test_table_counts_only_finished_matches_and_sorts(self):
+        from fpldash.league import compute_league_table
+        table = compute_league_table(_league_bootstrap(), _league_fixtures())
+        self.assertEqual([r["short_name"] for r in table], ["ARS", "LIV", "CHE"])
+        ars = table[0]
+        self.assertEqual((ars["played"], ars["won"], ars["drawn"], ars["lost"]), (2, 1, 1, 0))
+        self.assertEqual((ars["gf"], ars["ga"], ars["gd"], ars["points"]), (3, 1, 2, 4))
+        self.assertEqual(ars["form"], ["W", "D"])
+        self.assertEqual(table[2]["points"], 0)
+        self.assertEqual([r["position"] for r in table], [1, 2, 3])
+
+    def test_fixtures_default_to_current_gw_in_kickoff_order(self):
+        from fpldash.league import get_gameweek_fixtures
+        data = get_gameweek_fixtures(_league_bootstrap(), _league_fixtures())
+        self.assertEqual(data["gameweek"], 2)
+        self.assertEqual([m["id"] for m in data["fixtures"]], [4, 3])
+        self.assertEqual([m["status"] for m in data["fixtures"]], ["upcoming", "live"])
+        self.assertEqual(data["fixtures"][1]["home"]["short_name"], "CHE")
+
+    def test_fixtures_default_moves_to_next_gw_once_current_matches_are_played(self):
+        from fpldash.league import default_gameweek
+        fixtures = _league_fixtures()
+        for f in fixtures:
+            if f["event"] == 2:
+                f["finished_provisional"] = True
+        self.assertEqual(default_gameweek(_league_bootstrap(), fixtures), 3)
+
+    def test_fixtures_gw_is_clamped(self):
+        from fpldash.league import get_gameweek_fixtures
+        data = get_gameweek_fixtures(_league_bootstrap(), _league_fixtures(), gw=99)
+        self.assertEqual(data["gameweek"], 3)
+        self.assertEqual(data["fixtures"], [])
+
+
+class LeagueViewTests(TestCase):
+    def setUp(self):
+        self.client = Client()
+
+    @override_settings(SECURE_SSL_REDIRECT=False)
+    def test_api_table_and_fixtures(self):
+        with patch("fpldash.views.get_bootstrap", return_value=_league_bootstrap()), \
+             patch("fpldash.views.get_fixtures", return_value=_league_fixtures()):
+            table = self.client.get("/api/table").json()
+            fixtures = self.client.get("/api/fixtures", {"gw": "1"}).json()
+            bad_gw = self.client.get("/api/fixtures", {"gw": "abc"}).json()
+        self.assertEqual(table[0]["name"], "Arsenal")
+        self.assertEqual(fixtures["gameweek"], 1)
+        self.assertEqual(len(fixtures["fixtures"]), 2)
+        self.assertEqual(bad_gw["gameweek"], 2)
+
+    @override_settings(SECURE_SSL_REDIRECT=False)
+    def test_index_page_has_table_and_fixtures_tabs(self):
+        resp = self.client.get("/")
+        self.assertIn(b'data-tab="table"', resp.content)
+        self.assertIn(b'data-tab="fixtures"', resp.content)

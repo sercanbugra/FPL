@@ -8,13 +8,14 @@ import requests
 from django.http import JsonResponse
 from django.shortcuts import render
 
-from .cache import get_bootstrap, compute_team_fdr
+from .cache import get_bootstrap, get_fixtures, compute_team_fdr
 from .fpl_data import get_fpl_data
 from .forecast import get_forecast_data
+from .league import compute_league_table, get_gameweek_fixtures
 from .ml_predictions import get_ml_predicted_scores
 from .squad_builder import build_squads
 
-TEAM_ID = os.getenv("FPL_TEAM_ID", "1897520")
+TEAM_ID = os.getenv("FPL_TEAM_ID", "5521358")
 
 # ---------- Helpers ----------
 
@@ -203,6 +204,26 @@ def api_squad_builder(request):
         budget = max(60.0, min(budget, 110.0))
         result = build_squads(budget=budget)
         return JsonResponse(result)
+    except Exception as ex:
+        return JsonResponse({"error": str(ex)}, status=500)
+
+
+def api_table(request):
+    try:
+        table = compute_league_table(get_bootstrap(), get_fixtures())
+        return JsonResponse(table, safe=False)
+    except Exception as ex:
+        return JsonResponse({"error": str(ex)}, status=500)
+
+
+def api_fixtures(request):
+    try:
+        try:
+            gw = int(request.GET["gw"])
+        except (KeyError, ValueError):
+            gw = None
+        data = get_gameweek_fixtures(get_bootstrap(), get_fixtures(), gw)
+        return JsonResponse(data)
     except Exception as ex:
         return JsonResponse({"error": str(ex)}, status=500)
 
