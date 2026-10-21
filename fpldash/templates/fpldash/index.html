@@ -10,7 +10,7 @@
   <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
   <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.1/css/buttons.dataTables.min.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.3.0/css/bootstrap.min.css">
-  <link rel="stylesheet" href="{% static 'fpldash/style.css' %}?v=21">
+  <link rel="stylesheet" href="{% static 'fpldash/style.css' %}?v=22">
 </head>
 
 <body>
@@ -57,6 +57,7 @@
         <button class="tab-btn"        data-tab="builder">Squad Builder</button>
         <button class="tab-btn"        data-tab="table">PL Table</button>
         <button class="tab-btn"        data-tab="fixtures">Fixtures</button>
+        <button class="tab-btn"        data-tab="league">Mini League</button>
       </nav>
 
       <div class="main-panes">
@@ -135,6 +136,71 @@
           </div>
         </div>
 
+        <!-- TAB 7: Mini League -->
+        <div class="tab-pane" id="pane-league">
+          <div class="ml-scroll">
+            <div id="ml-status"></div>
+            <div id="ml-root" hidden>
+
+              <section class="ml-hero">
+                <div class="ml-hero-top">
+                  <div>
+                    <div class="ml-kicker">Mini League</div>
+                    <h2 class="ml-title" id="ml-league-name"></h2>
+                  </div>
+                  <div class="ml-gw-nav">
+                    <button id="ml-gw-prev" aria-label="Previous gameweek">&lsaquo;</button>
+                    <span id="ml-gw-label">Gameweek —</span>
+                    <button id="ml-gw-next" aria-label="Next gameweek">&rsaquo;</button>
+                  </div>
+                </div>
+                <div class="ml-hero-stats" id="ml-hero-stats"></div>
+              </section>
+
+              <section class="ml-section">
+                <h3 class="ml-h">Weekly story</h3>
+                <div class="ml-story">
+                  <div class="ml-story-bars" id="ml-story-bars"></div>
+                  <div class="ml-story-stage" id="ml-story-stage"></div>
+                  <button class="ml-story-nav prev" id="ml-story-prev" aria-label="Previous slide">&lsaquo;</button>
+                  <button class="ml-story-nav next" id="ml-story-next" aria-label="Next slide">&rsaquo;</button>
+                </div>
+              </section>
+
+              <section class="ml-section" id="ml-race">
+                <div class="ml-h-row">
+                  <h3 class="ml-h">The race</h3>
+                  <div class="ml-race-controls">
+                    <button id="ml-race-play" class="btn btn-primary btn-sm">▶ Play</button>
+                    <input type="range" id="ml-race-slider" min="0" max="0" value="0" aria-label="Gameweek">
+                  </div>
+                </div>
+                <div class="ml-race-board">
+                  <div class="ml-race-gw" id="ml-race-gw">GW1</div>
+                  <div class="ml-race-rows" id="ml-race-rows"></div>
+                </div>
+              </section>
+
+              <section class="ml-section">
+                <h3 class="ml-h">League position by gameweek</h3>
+                <div class="ml-bump-wrap" id="ml-bump-wrap"><canvas id="ml-bump-chart"></canvas></div>
+              </section>
+
+              <section class="ml-section">
+                <h3 class="ml-h">Gameweek heatmap</h3>
+                <p class="ml-note">Each column is coloured from that week's lowest (red) to highest (green) score. Hover a cell for captain, hits and bench points.</p>
+                <div class="ml-heatmap" id="ml-heatmap"></div>
+              </section>
+
+              <section class="ml-section">
+                <h3 class="ml-h">Season records</h3>
+                <div class="ml-records" id="ml-records"></div>
+              </section>
+
+            </div>
+          </div>
+        </div>
+
       </div><!-- /main-panes -->
     </div><!-- /main-content -->
 
@@ -170,6 +236,7 @@
   <button class="mnav-btn"        data-msec="builder">Build</button>
   <button class="mnav-btn"        data-msec="table">Table</button>
   <button class="mnav-btn"        data-msec="fixtures">Fixtures</button>
+  <button class="mnav-btn"        data-msec="league">League</button>
 </nav>
 
 <!-- Player Modal -->
@@ -194,6 +261,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="{% static 'fpldash/polygon.js' %}?v=6"></script>
+<script src="{% static 'fpldash/mini_league.js' %}?v=1"></script>
 
 <script>
 // ── UTILS ──────────────────────────────────────────────────
@@ -234,6 +302,7 @@ function setupTabs() {
       if (btn.dataset.tab === 'builder') ensureBuilderLoaded();
       if (btn.dataset.tab === 'table') ensureLeagueTableLoaded();
       if (btn.dataset.tab === 'fixtures') ensureFixturesLoaded();
+      if (btn.dataset.tab === 'league') ensureMiniLeagueLoaded();
     });
   });
   // Rail tabs
@@ -1011,7 +1080,7 @@ function setupMobileNav() {
       mainContent.classList.add('mob-visible');
       // Activate the matching main tab
       const tabMap = { stats: 'stats', forecast: 'forecast', polygon: 'polygon', builder: 'builder',
-                       table: 'table', fixtures: 'fixtures' };
+                       table: 'table', fixtures: 'fixtures', league: 'league' };
       const tabName = tabMap[sec];
       if (tabName) {
         document.querySelectorAll('.main-tabs .tab-btn').forEach(b => b.classList.remove('active'));
@@ -1028,6 +1097,7 @@ function setupMobileNav() {
         if (tabName === 'builder') ensureBuilderLoaded();
         if (tabName === 'table') ensureLeagueTableLoaded();
         if (tabName === 'fixtures') ensureFixturesLoaded();
+        if (tabName === 'league') ensureMiniLeagueLoaded();
       }
     }
   }
@@ -1063,6 +1133,12 @@ window.onload = async function() {
   // Fixtures gameweek navigation
   document.getElementById('fxPrevBtn').addEventListener('click', () => loadFixtures(window._fixturesGw - 1));
   document.getElementById('fxNextBtn').addEventListener('click', () => loadFixtures(window._fixturesGw + 1));
+
+  // Deep link: /#league, /#fixtures … opens that tab directly
+  const hashTab = document.querySelector(`.main-tabs .tab-btn[data-tab="${location.hash.slice(1)}"]`);
+  if (hashTab) hashTab.click();
+  const hashSec = document.querySelector(`.mnav-btn[data-msec="${location.hash.slice(1)}"]`);
+  if (hashSec) hashSec.click();  // only has a listener on phones
 
   // Load in parallel — team & table first (visible), then rest
   await loadMyTeam();

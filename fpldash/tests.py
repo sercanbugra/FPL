@@ -302,3 +302,66 @@ class LeagueViewTests(TestCase):
         resp = self.client.get("/")
         self.assertIn(b'data-tab="table"', resp.content)
         self.assertIn(b'data-tab="fixtures"', resp.content)
+
+
+def _mini_league_fixture():
+    managers = [
+        {"entry": 1, "team": "Alpha", "player": "A", "rank": 1, "last_rank": 2, "total": 0, "event_total": 0},
+        {"entry": 2, "team": "Bravo", "player": "B", "rank": 2, "last_rank": 1, "total": 0, "event_total": 0},
+        {"entry": 3, "team": "Late", "player": "C", "rank": 3, "last_rank": 3, "total": 0, "event_total": 0},
+    ]
+
+    def gw(event, points, total, hit=0, bench=0):
+        return {"event": event, "points": points, "total_points": total, "overall_rank": 1000,
+                "value": 1000, "bank": 5, "event_transfers": 1 if hit else 0,
+                "event_transfers_cost": hit, "points_on_bench": bench}
+
+    histories = {
+        1: {"current": [gw(1, 40, 40), gw(2, 90, 126, hit=4, bench=12)], "chips": [{"name": "3xc", "event": 2}]},
+        2: {"current": [gw(1, 60, 60), gw(2, 50, 110)], "chips": []},
+        3: {"current": [gw(2, 30, 30)], "chips": []},  # joined in GW2
+    }
+    captains = {(1, 2): {"name": "Haaland", "points": 36}, (2, 2): {"name": "Salah", "points": 8}}
+    return managers, histories, captains, [1, 2]
+
+
+class MiniLeagueTests(TestCase):
+    def test_weeks_net_points_and_league_rank(self):
+        from fpldash.mini_league import build_weeks
+        managers, histories, captains, gws = _mini_league_fixture()
+        weeks = build_weeks(managers, histories, captains, gws)
+        self.assertEqual(weeks[1][1]["points"], 86)  # 90 minus the -4 hit
+        self.assertEqual([weeks[e][0]["league_rank"] for e in (1, 2, 3)], [2, 1, 3])
+        self.assertEqual([weeks[e][1]["league_rank"] for e in (1, 2, 3)], [1, 2, 3])
+        self.assertIsNone(weeks[3][0]["points"])  # not yet joined
+        self.assertEqual(weeks[1][1]["chip"], "3xc")
+
+    def test_weekly_awards(self):
+        from fpldash.mini_league import build_weeks, build_awards
+        managers, histories, captains, gws = _mini_league_fixture()
+        weeks = build_weeks(managers, histories, captains, gws)
+        awards = {a["key"]: a for a in build_awards(managers, weeks, gws, 2)}
+        self.assertEqual(awards["motw"]["entry"], 1)
+        self.assertEqual(awards["spoon"]["entry"], 3)
+        self.assertEqual((awards["climber"]["entry"], awards["climber"]["value"]), (1, 1))
+        self.assertEqual(awards["faller"]["entry"], 2)
+        self.assertEqual(awards["captain"]["value"], 36)
+        self.assertEqual(awards["bench"]["value"], 12)
+        self.assertEqual(awards["hit"]["value"], -4)
+        self.assertIn("chip", awards)
+        self.assertEqual(build_awards(managers, weeks, gws, 99), [])
+
+    def test_season_records(self):
+        from fpldash.mini_league import build_weeks, build_records
+        managers, histories, captains, gws = _mini_league_fixture()
+        weeks = build_weeks(managers, histories, captains, gws)
+        records = {r["key"]: r for r in build_records(managers, weeks, gws)}
+        self.assertEqual((records["high"]["entry"], records["high"]["value"]), (1, 86))
+        self.assertEqual(records["wins"]["value"], 1)
+        self.assertEqual(records["capsum"]["entry"], 1)
+        self.assertEqual(records["hitsum"]["value"], -4)
+
+    @override_settings(SECURE_SSL_REDIRECT=False)
+    def test_api_mini_league_rejects_bad_id(self):
+        resp = Client().get("/api/mini-league", {"id": "abc"})
+        self.assertEqual(resp.status_code, 400)

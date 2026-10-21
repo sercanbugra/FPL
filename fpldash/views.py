@@ -12,10 +12,12 @@ from .cache import get_bootstrap, get_fixtures, compute_team_fdr
 from .fpl_data import get_fpl_data
 from .forecast import get_forecast_data
 from .league import compute_league_table, get_gameweek_fixtures
+from .mini_league import get_mini_league
 from .ml_predictions import get_ml_predicted_scores
 from .squad_builder import build_squads
 
 TEAM_ID = os.getenv("FPL_TEAM_ID", "5521358")
+LEAGUE_ID = os.getenv("FPL_LEAGUE_ID", "659612")
 
 # ---------- Helpers ----------
 
@@ -223,6 +225,20 @@ def api_fixtures(request):
         except (KeyError, ValueError):
             gw = None
         data = get_gameweek_fixtures(get_bootstrap(), get_fixtures(), gw)
+        return JsonResponse(data)
+    except Exception as ex:
+        return JsonResponse({"error": str(ex)}, status=500)
+
+
+def api_mini_league(request):
+    """Weekly stats, awards and season records for a classic mini-league (?id=, default FPL_LEAGUE_ID)."""
+    try:
+        try:
+            league_id = int(request.GET.get("id") or LEAGUE_ID)
+        except ValueError:
+            return JsonResponse({"error": "League id must be a number"}, status=400)
+        data = get_mini_league(league_id)
+        data["my_entry"] = int(TEAM_ID) if str(TEAM_ID).isdigit() else None
         return JsonResponse(data)
     except Exception as ex:
         return JsonResponse({"error": str(ex)}, status=500)

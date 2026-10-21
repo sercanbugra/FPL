@@ -23,7 +23,8 @@ PRs to `main`. Keep both green.
 
 Config comes from env vars, loaded from `.env` via `python-dotenv`:
 `SECRET_KEY`, `DEBUG`, `ALLOWED_HOSTS` (comma-separated), `FPL_TEAM_ID`
-(the default manager ID shown in My Squad), and `TWITTER_BEARER_TOKEN` (optional;
+(the default manager ID shown in My Squad), `FPL_LEAGUE_ID` (the classic league
+shown in the Mini League tab, default `659612`), and `TWITTER_BEARER_TOKEN` (optional;
 when set, price-change tweets come from the official X API instead of the scraping
 fallbacks).
 
@@ -78,7 +79,14 @@ and each worker keeps its own separate cache.
    of its matches are played, then the next one. FPL's event `finished` flag lags behind
    bonus processing, so it isn't used for this. Live scores are only as fresh as the
    30-min fixtures cache.
-6. `fpldash/views.py` is kept thin. Each `api_*` view builds data via the modules above
+6. `fpldash/mini_league.py` builds the Mini League report for a classic league:
+   standings, then for every manager `entry/{id}/history/` and the captain from
+   `entry/{id}/event/{gw}/picks/` for every GW, scored with `event/{gw}/live/`. That's
+   roughly managers × GWs requests (capped at `MAX_MANAGERS`), fetched in parallel.
+   Responses for *finished* GWs are cached permanently because they never change.
+   Everything else uses the usual 30-min TTL. `build_weeks` / `build_awards` /
+   `build_records` are pure and tested without the network.
+7. `fpldash/views.py` is kept thin. Each `api_*` view builds data via the modules above
    and returns `JsonResponse`. Business logic beyond request parsing and error wrapping
    doesn't belong here. A few views call the FPL API directly and are **uncached**:
    - `/api/myteam` (optional `?id=` for any manager, default `FPL_TEAM_ID`) calls
@@ -87,13 +95,16 @@ and each worker keeps its own separate cache.
    - `/api/pricechanges` tries three sources in order: official X API (needs the
      token), Nitter RSS mirrors, then a Twitter syndication endpoint scrape.
      `/api/pricechanges_fpl` instead derives changes from bootstrap `cost_change_event`.
-7. `fpldash/templates/fpldash/index.html` and `static/fpldash/polygon.js` make up a
+8. `fpldash/templates/fpldash/index.html`, `static/fpldash/polygon.js` and
+   `static/fpldash/mini_league.js` make up a
    single-page frontend (jQuery + DataTables + Bootstrap 5 + Chart.js via CDN, no build
    step). The layout is a left **My Squad** sidebar (team-ID input, resizable) plus main
    tabs: Player Stats (`/api/data`), GW Forecast (`/api/forecast`), Polygon Filter (a
    radar chart whose metrics are read dynamically from `/api/data`, with no hardcoded
-   whitelist) and Squad Builder (`/api/squad-builder`), PL Table (`/api/table`) and Fixtures
-   (`/api/fixtures?gw=`). A right rail (Price Changes /
+   whitelist) and Squad Builder (`/api/squad-builder`), PL Table (`/api/table`), Fixtures
+   (`/api/fixtures?gw=`) and Mini League (`/api/mini-league`, an animated report).
+   `/#<tab>` deep-links to a tab. Static asset URLs carry a `?v=N` cache-buster, so bump
+   it when you edit a CSS/JS file. A right rail (Price Changes /
    Smart Picks) shows only alongside Player Stats. All server communication is plain
    `fetch()` to the `api_*` endpoints.
 
