@@ -43,9 +43,10 @@ with `flyctl status --app <name>` / `flyctl logs --app <name>` rather than assum
 This is a single-app Django project: `fplsite` (settings/urls/wsgi) wraps one app, `fpldash`.
 There is no database-backed domain model. `db.sqlite3` only holds Django's
 built-in tables (admin/auth/sessions). All FPL data is fetched live from the
-official FPL API and never persisted. Instead, each layer keeps its own in-process,
-lock-guarded 30-min TTL cache, so a single gunicorn worker serves mostly from memory
-and each worker keeps its own separate cache.
+official FPL API and never persisted. Instead, each module keeps its own in-process,
+lock-guarded cache (30-min TTL by default; `mini_league.py` also keeps finished-GW data
+permanently). Every gunicorn worker has its own copy, and Fly.io stops idle machines,
+so cold starts refetch everything.
 
 **Data flow**, request → response:
 
@@ -101,22 +102,34 @@ and each worker keeps its own separate cache.
    - `/api/pricechanges` tries three sources in order: official X API (needs the
      token), Nitter RSS mirrors, then a Twitter syndication endpoint scrape.
      `/api/pricechanges_fpl` instead derives changes from bootstrap `cost_change_event`.
-8. `fpldash/templates/fpldash/index.html`, `static/fpldash/polygon.js` and
-   `static/fpldash/mini_league.js` make up a
-   single-page frontend (jQuery + DataTables + Bootstrap 5 + Chart.js via CDN, no build
-   step). The layout is a left **My Squad** sidebar (team-ID input, resizable) plus main
-   tabs: Player Stats (`/api/data`), GW Forecast (`/api/forecast`), Polygon Filter (a
-   radar chart whose metrics are read dynamically from `/api/data`, with no hardcoded
-   whitelist) and Squad Builder (`/api/squad-builder`), Table & Fixtures (league table from
-   `/api/table` beside the GW fixtures from `/api/fixtures?gw=`; `#fixtures` aliases it) and Mini League (`/api/mini-league`, an animated report).
-   `/#<tab>` deep-links to a tab. Static asset URLs carry a `?v=N` cache-buster, so bump
-   it when you edit a CSS/JS file. A right rail (Price Changes /
-   Smart Picks) shows only alongside Player Stats. All server communication is plain
-   `fetch()` to the `api_*` endpoints.
+8. The frontend is a single page: `fpldash/templates/fpldash/index.html` (markup plus
+   most of the JS inline), `static/fpldash/polygon.js`, `static/fpldash/mini_league.js`
+   and `static/fpldash/style.css`. It uses jQuery, DataTables, Bootstrap 5 and Chart.js
+   via CDN, with no build step. A left **My Squad** sidebar (team-ID input, resizable)
+   sits beside these main tabs:
+   - Player Stats (`/api/data`)
+   - GW Forecast (`/api/forecast`); clicking a row opens the Player Stats modal
+   - Polygon Filter: a radar chart whose metrics are read dynamically from `/api/data`,
+     with no hardcoded whitelist, and per-metric min→max axes
+   - Squad Builder (`/api/squad-builder`)
+   - Table & Fixtures (`/api/table` beside `/api/fixtures?gw=`)
+   - Mini League (`/api/mini-league` plus `/api/captaincy`), an animated report
+
+   A right rail (Price Changes / Smart Picks) shows only alongside Player Stats. Tabs
+   other than Player Stats load lazily on first open via `ensure*Loaded()` hooks in
+   `setupTabs()` and the mobile `setupMobileNav()` `tabMap`. A new tab must be wired into
+   both, plus the `.mobile-nav` buttons. `/#<tab>` deep-links to a tab (`#fixtures` is an
+   alias for `#table`). Static asset URLs carry a `?v=N` cache-buster, so bump it when
+   you edit a CSS/JS file. All server communication is plain `fetch()` to the `api_*`
+   endpoints.
 
 Because nothing is persisted, correctness work is almost always about the
-transform/scoring logic in `fpl_data.py` / `forecast.py` / `ml_predictions.py` /
-`squad_builder.py`, or about cache TTL/threading. `fpldash/tests.py` covers these with
-no real network calls: `SmokeTests` (rendered page), `CacheTests` (`requests.get`
-mocked), `SquadBuilderTests` (ILP squad legality against a small synthetic bootstrap
-fixture) and `SquadBuilderViewTests`.
+transform/scoring logic (`fpl_data.py`, `forecast.py`, `ml_predictions.py`,
+`squad_builder.py`, `league.py`, `mini_league.py`) or about cache TTL/threading.
+`fpldash/tests.py` covers these with no real network calls. It has a page smoke test,
+cache tests with `requests.get` mocked, ILP squad-legality tests against a small
+synthetic bootstrap fixture, and tests for the pure league/mini-league builders against
+hand-built payloads. Views are tested with the builder function patched at
+`fpldash.views.<name>`. `DEBUG` defaults to `False`, which turns on `SECURE_SSL_REDIRECT`,
+so view tests need `@override_settings(SECURE_SSL_REDIRECT=False)` or the test client
+only gets a 301. There are no JS tests.
