@@ -1568,13 +1568,126 @@ div.dataTables_wrapper .dataTables_paginate .paginate_button:hover {
 .ml-record-team { font-size: 0.8rem; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ml-record-detail { font-size: 0.72rem; color: var(--muted); margin-top: 4px; }
 
+/* Insight sections */
+.ml-grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.ml-grid2 > .ml-section { margin-bottom: 16px; }
+@media (max-width: 1100px) { .ml-grid2 { grid-template-columns: minmax(0, 1fr); gap: 0; } }
+
+.ml-chart-wrap { position: relative; height: 260px; }
+
+.ml-mini-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+.ml-mini-table th {
+  font-size: 0.66rem; font-weight: 700; text-transform: uppercase; color: var(--muted);
+  text-align: center; padding: 4px; border-bottom: 1px solid var(--border);
+}
+.ml-mini-table td { text-align: center; padding: 5px 4px; border-bottom: 1px solid var(--border); font-variant-numeric: tabular-nums; }
+.ml-mini-table tbody tr { animation: ml-rise 0.45s ease both; }
+.ml-mini-table tr:last-child td { border-bottom: none; }
+.ml-mini-table .ml-hm-team { text-align: left; white-space: nowrap; max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
+.ml-mini-table tr.me td { background: #fffbeb; }
+.ml-mini-pts { font-weight: 800; }
+.ml-pct-col { width: 34%; }
+.ml-pct { position: relative; height: 18px; background: var(--bg-base); border-radius: 4px; overflow: hidden; }
+.ml-pct span { position: absolute; inset: 0 auto 0 0; width: var(--w); opacity: 0.35; animation: ml-bar-grow 1s cubic-bezier(.2,.8,.2,1) both; }
+.ml-pct b { position: relative; font-size: 0.7rem; line-height: 18px; }
+
+@keyframes ml-bar-grow { from { width: 0; } }
+
+.ml-form-row {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) 90px 70px 56px;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 4px;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.78rem;
+  animation: ml-rise 0.45s ease both;
+}
+.ml-form-row:last-child { border-bottom: none; }
+.ml-form-row.me { background: #fffbeb; border-radius: 4px; }
+.ml-form-pos { font-weight: 800; color: var(--muted); text-align: center; }
+.ml-form-team { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ml-form-pts { font-weight: 800; font-size: 0.95rem; text-align: right; font-variant-numeric: tabular-nums; }
+.ml-form-pts small { font-size: 0.65rem; color: var(--muted); font-weight: 600; }
+.ml-form-trend { font-size: 0.7rem; font-weight: 700; text-align: right; }
+.ml-up-sm { color: var(--success); }
+.ml-down-sm { color: var(--danger); }
+.ml-same-sm { color: var(--muted); }
+.ml-spark polyline { stroke-dasharray: 300; stroke-dashoffset: 300; animation: ml-draw 1.4s ease forwards; }
+@keyframes ml-draw { to { stroke-dashoffset: 0; } }
+
+.ml-cap-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 24px; align-items: start; }
+@media (max-width: 1100px) { .ml-cap-layout { grid-template-columns: minmax(0, 1fr); } }
+.ml-donut-wrap { position: relative; height: 240px; }
+.ml-donut-center {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 58%; /* centre of the ring when the legend sits on the right */
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+}
+.ml-donut-center b { font-size: 1.6rem; font-weight: 900; color: var(--text); line-height: 1; }
+.ml-donut-center span { font-size: 0.72rem; color: var(--muted); font-weight: 600; }
+
+.ml-bar-row {
+  display: grid;
+  grid-template-columns: minmax(0, 170px) minmax(0, 1fr) 118px;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0;
+  font-size: 0.78rem;
+}
+.ml-bar-row.me .ml-bar-label .ml-team { color: var(--primary); font-weight: 800; }
+.ml-bar-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ml-bar-track { position: relative; height: 16px; background: var(--bg-base); border-radius: 8px; overflow: hidden; }
+.ml-bar-fill { position: absolute; inset: 0 auto 0 0; width: 0; border-radius: 8px; transition: width 1s cubic-bezier(.2,.8,.2,1); }
+.in .ml-bar-fill { width: var(--w); }
+.ml-bar-val { font-weight: 700; font-variant-numeric: tabular-nums; }
+.ml-bar-val small { color: var(--muted); font-weight: 600; }
+
+.ml-range-track { height: 22px; overflow: visible; }
+.ml-range {
+  position: absolute;
+  top: 0; bottom: 0;
+  width: 0;
+  border-radius: 11px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 7px;
+  color: #fff;
+  font-size: 0.66rem;
+  font-weight: 800;
+  overflow: hidden;
+  white-space: nowrap;
+  transition: width 1s cubic-bezier(.2,.8,.2,1);
+}
+.in .ml-range { width: var(--w); }
+.ml-range-avg {
+  position: absolute;
+  top: 50%;
+  width: 12px; height: 12px;
+  margin: -6px 0 0 -6px;
+  border-radius: 50%;
+  background: #fff;
+  border: 3px solid #0f172a;
+  opacity: 0;
+  transition: opacity 0.4s;
+}
+.in .ml-range-avg { opacity: 1; }
+
 @media (prefers-reduced-motion: reduce) {
   .ml-hero, .ml-tile, .ml-slide, .ml-slide > *, .ml-podium-bar, .ml-hm-cell, .ml-records.in .ml-record,
-  .ml-chip-pill, .ml-chip-state {
+  .ml-chip-pill, .ml-chip-state, .ml-mini-table tbody tr, .ml-pct span, .ml-form-row, .ml-spark polyline {
     animation: none !important;
   }
+  .ml-spark polyline { stroke-dashoffset: 0; }
   .ml-record { opacity: 1; }
-  .ml-race-row, .ml-race-bar { transition: none; }
+  .ml-race-row, .ml-race-bar, .ml-bar-fill, .ml-range, .ml-range-avg { transition: none; }
 }
 
 /* ============================================================
@@ -1798,6 +1911,11 @@ div.dataTables_wrapper .dataTables_paginate .paginate_button:hover {
   .ml-race-name { flex-basis: 96px; font-size: 0.7rem; }
   .ml-race-controls input[type="range"] { width: 110px; }
   .ml-bump-wrap { height: 300px; }
+  .ml-bar-row { grid-template-columns: minmax(0, 110px) minmax(0, 1fr) 74px; gap: 6px; }
+  .ml-bar-val small { display: none; }
+  .ml-form-row { grid-template-columns: 18px minmax(0, 1fr) 70px 52px; }
+  .ml-form-trend { display: none; }
+  .ml-spark { width: 70px; }
 }
 
 /* ============================================================

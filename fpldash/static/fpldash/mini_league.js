@@ -307,6 +307,192 @@
     });
   }
 
+  // ── INSIGHT CHARTS (gap to leader, overall rank) ──
+  const charts = {};
+
+  function managerLineChart(canvasId, valueOf, yScale, tooltipLabel) {
+    if (charts[canvasId]) charts[canvasId].destroy();
+    charts[canvasId] = new Chart(document.getElementById(canvasId), {
+      type: 'line',
+      data: {
+        labels: ML.gameweeks.map(g => `GW${g}`),
+        datasets: ML.managers.map(m => ({
+          label: m.team,
+          data: ML.gameweeks.map((_, i) => valueOf(m.entry, i)),
+          borderColor: colorOf[m.entry],
+          backgroundColor: colorOf[m.entry],
+          borderWidth: m.entry === myEntry ? 4 : 2,
+          pointRadius: m.entry === myEntry ? 4 : 2,
+          tension: 0.3,
+          spanGaps: true,
+        })),
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: REDUCED ? false : {
+          duration: 600,
+          delay: c => (c.type === 'data' && c.mode === 'default') ? c.dataIndex * 160 + c.datasetIndex * 20 : 0,
+        },
+        interaction: { mode: 'nearest', intersect: false },
+        scales: { y: yScale, x: { grid: { display: false } } },
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: c => `${c.dataset.label}: ${tooltipLabel(c.parsed.y)}` } },
+        },
+      },
+    });
+  }
+
+  function renderGap() {
+    const leaderTotal = i => Math.max(...ML.managers.map(m => week(m.entry, i).total));
+    managerLineChart(
+      'ml-gap-chart',
+      (entry, i) => leaderTotal(i) - week(entry, i).total,
+      { reverse: true, beginAtZero: true, ticks: { callback: v => v === 0 ? 'Leader' : `-${v}` },
+        grid: { color: 'rgba(100,116,139,0.15)' } },
+      v => v === 0 ? 'leading' : `${v} pts behind`,
+    );
+  }
+
+  // Chart.js generates every 1-9 × 10^n tick on a log axis (with float noise);
+  // label only the 1/2/5 ones so the axis stays readable.
+  function isNiceLogTick(v) {
+    const m = v / Math.pow(10, Math.floor(Math.log10(v) + 1e-9));
+    return [1, 2, 5].some(n => Math.abs(m - n) < 1e-6);
+  }
+
+  function renderOverallRank() {
+    const fmt = v => v >= 1e6 ? `${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `${Math.round(v / 1e3)}k` : `${v}`;
+    managerLineChart(
+      'ml-orank-chart',
+      (entry, i) => week(entry, i).overall_rank,
+      { type: 'logarithmic', reverse: true, grid: { color: 'rgba(100,116,139,0.15)' },
+        ticks: { autoSkip: false, callback: v => isNiceLogTick(v) ? fmt(v) : '' } },
+      v => `#${Math.round(v).toLocaleString()}`,
+    );
+  }
+
+  // ── VIRTUAL H2H ──
+  function renderH2H() {
+    const rows = ML.insights.h2h;
+    document.getElementById('ml-h2h').innerHTML = `
+      <table class="ml-mini-table">
+        <thead><tr><th>#</th><th class="ml-hm-team">Team</th><th>W</th><th>D</th><th>L</th><th class="ml-pct-col">Win %</th><th>Pts</th></tr></thead>
+        <tbody>${rows.map((r, i) => `
+          <tr class="${r.entry === myEntry ? 'me' : ''}" style="animation-delay:${i * 50}ms">
+            <td class="ml-hm-rank">${i + 1}</td>
+            <td class="ml-hm-team">${managerChip(r.entry)}</td>
+            <td>${r.w}</td><td>${r.d}</td><td>${r.l}</td>
+            <td class="ml-pct-col"><div class="ml-pct"><span style="--w:${r.win_pct}%;background:${colorOf[r.entry]}"></span><b>${r.win_pct}%</b></div></td>
+            <td class="ml-mini-pts">${r.points}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>`;
+  }
+
+  // ── HOT FORM ──
+  function sparkline(series, color) {
+    if (series.length < 2) return '';
+    const w = 90, h = 26, pad = 3;
+    const lo = Math.min(...series), hi = Math.max(...series);
+    const x = i => pad + (i * (w - 2 * pad)) / (series.length - 1);
+    const y = v => hi === lo ? h / 2 : h - pad - ((v - lo) * (h - 2 * pad)) / (hi - lo);
+    const pts = series.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+    const last = series.length - 1;
+    return `<svg class="ml-spark" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" aria-hidden="true">
+      <polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+      <circle cx="${x(last)}" cy="${y(series[last])}" r="3" fill="${color}"/></svg>`;
+  }
+
+  function renderForm() {
+    const n = ML.insights.form_window;
+    document.getElementById('ml-form-note').textContent =
+      `Points over the last ${n} gameweeks, compared with the ${n} before. Sparkline shows the last 6 weeks.`;
+    const rows = ML.insights.form;
+    const fire = ['🔥', '🔥', '🔥'];
+    document.getElementById('ml-form').innerHTML = rows.map((r, i) => {
+      let trend = '';
+      if (r.prev !== null) {
+        const d = r.last - r.prev;
+        trend = d > 0 ? `<span class="ml-up-sm">▲ ${d}</span>` : d < 0 ? `<span class="ml-down-sm">▼ ${-d}</span>` : '<span class="ml-same-sm">= 0</span>';
+      }
+      const icon = i < 3 ? fire[i] : i >= rows.length - 2 ? '🧊' : '';
+      return `
+        <div class="ml-form-row${r.entry === myEntry ? ' me' : ''}" style="animation-delay:${i * 50}ms">
+          <span class="ml-form-pos">${i + 1}</span>
+          <span class="ml-form-team">${managerChip(r.entry)} ${icon}</span>
+          ${sparkline(r.series, colorOf[r.entry])}
+          <span class="ml-form-pts">${r.last}<small> pts</small></span>
+          <span class="ml-form-trend">${trend}</span>
+        </div>`;
+    }).join('');
+  }
+
+  // ── CAPTAINCY ──
+  function renderCaptains() {
+    const { popular, share } = ML.insights.captains;
+    const top = popular.slice(0, 6);
+    const rest = popular.slice(6).reduce((s, c) => s + c.count, 0);
+    const labels = top.map(c => c.name).concat(rest ? ['Others'] : []);
+    const counts = top.map(c => c.count).concat(rest ? [rest] : []);
+    const total = counts.reduce((a, b) => a + b, 0) || 1;
+    const colors = ['#0ea5e9', '#f59e0b', '#8b5cf6', '#10b981', '#ef4444', '#ec4899', '#94a3b8'];
+
+    if (charts.donut) charts.donut.destroy();
+    charts.donut = new Chart(document.getElementById('ml-cap-donut'), {
+      type: 'doughnut',
+      data: { labels, datasets: [{ data: counts, backgroundColor: colors, borderWidth: 2, borderColor: '#fff' }] },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: '64%',
+        animation: REDUCED ? false : { animateRotate: true, duration: 1400 },
+        plugins: {
+          legend: { position: 'right', labels: { boxWidth: 12, font: { size: 11 } } },
+          tooltip: { callbacks: { label: c => {
+            const p = popular.find(x => x.name === c.label);
+            return `${c.label}: ${c.parsed}× (${Math.round(100 * c.parsed / total)}%)${p ? ` · ${p.points} pts` : ''}`;
+          } } },
+        },
+      },
+    });
+    if (top.length) {
+      document.getElementById('ml-donut-center').innerHTML =
+        `<b>${Math.round(100 * top[0].count / total)}%</b><span>${esc(top[0].name)}</span>`;
+    }
+
+    const max = Math.max(1, ...share.map(r => r.pct));
+    const wrap = document.getElementById('ml-cap-share');
+    wrap.innerHTML = share.map((r, i) => `
+      <div class="ml-bar-row${r.entry === myEntry ? ' me' : ''}">
+        <span class="ml-bar-label">${managerChip(r.entry)}</span>
+        <span class="ml-bar-track"><span class="ml-bar-fill" style="--w:${(r.pct / max) * 100}%;background:${colorOf[r.entry]};transition-delay:${i * 60}ms"></span></span>
+        <span class="ml-bar-val">${r.pct}%<small> · ${r.captain_points} pts</small></span>
+      </div>`).join('');
+    requestAnimationFrame(() => wrap.classList.add('in'));
+  }
+
+  // ── HIGHS & LOWS ──
+  function renderRanges() {
+    const rows = ML.insights.ranges;
+    const hi = Math.max(1, ...rows.map(r => r.max));
+    const wrap = document.getElementById('ml-ranges');
+    const pct = v => (Math.max(0, v) / hi) * 100;
+    wrap.innerHTML = rows.map((r, i) => `
+      <div class="ml-bar-row${r.entry === myEntry ? ' me' : ''}">
+        <span class="ml-bar-label">${managerChip(r.entry)}</span>
+        <span class="ml-bar-track ml-range-track">
+          <span class="ml-range" style="left:${pct(r.min)}%;--w:${pct(r.max) - pct(r.min)}%;background:${colorOf[r.entry]};transition-delay:${i * 60}ms">
+            <span class="ml-range-lo">${r.min}</span><span class="ml-range-hi">${r.max}</span>
+          </span>
+          <span class="ml-range-avg" style="left:${pct(r.avg)}%;transition-delay:${i * 60 + 500}ms" title="Average ${r.avg}"></span>
+        </span>
+        <span class="ml-bar-val">avg ${r.avg}</span>
+      </div>`).join('');
+    requestAnimationFrame(() => wrap.classList.add('in'));
+  }
+
   // ── HEATMAP ──
   function heatColor(t) {
     // t in [0,1]: red → amber → green
@@ -455,6 +641,12 @@
       raceStep(0);
       onVisible(document.getElementById('ml-race'), () => playRace(true));
       onVisible(document.getElementById('ml-bump-wrap'), renderBump);
+      onVisible(document.getElementById('ml-gap-wrap'), renderGap);
+      onVisible(document.getElementById('ml-orank-wrap'), renderOverallRank);
+      renderH2H();
+      renderForm();
+      onVisible(document.getElementById('ml-cap-donut-wrap'), renderCaptains);
+      onVisible(document.getElementById('ml-ranges').closest('.ml-section'), renderRanges);
       renderChips();
       renderRecords();
     } catch (e) {

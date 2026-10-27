@@ -10,7 +10,7 @@
   <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
   <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.1/css/buttons.dataTables.min.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.3.0/css/bootstrap.min.css">
-  <link rel="stylesheet" href="{% static 'fpldash/style.css' %}?v=24">
+  <link rel="stylesheet" href="{% static 'fpldash/style.css' %}?v=25">
 </head>
 
 <body>
@@ -188,6 +188,55 @@
                 <div class="ml-bump-wrap" id="ml-bump-wrap"><canvas id="ml-bump-chart"></canvas></div>
               </section>
 
+              <div class="ml-grid2">
+                <section class="ml-section">
+                  <h3 class="ml-h">Title race gap</h3>
+                  <p class="ml-note">Points behind the leader after each gameweek. Lines at the top are in the hunt.</p>
+                  <div class="ml-chart-wrap" id="ml-gap-wrap"><canvas id="ml-gap-chart"></canvas></div>
+                </section>
+                <section class="ml-section">
+                  <h3 class="ml-h">Overall rank journey</h3>
+                  <p class="ml-note">Each team's world ranking among all FPL managers (log scale, higher is better).</p>
+                  <div class="ml-chart-wrap" id="ml-orank-wrap"><canvas id="ml-orank-chart"></canvas></div>
+                </section>
+              </div>
+
+              <div class="ml-grid2">
+                <section class="ml-section">
+                  <h3 class="ml-h">Virtual H2H league</h3>
+                  <p class="ml-note">Every week, every score is compared against every rival's: win 3, draw 1, loss 0.</p>
+                  <div id="ml-h2h"></div>
+                </section>
+                <section class="ml-section">
+                  <h3 class="ml-h">Hot form</h3>
+                  <p class="ml-note" id="ml-form-note"></p>
+                  <div id="ml-form"></div>
+                </section>
+              </div>
+
+              <section class="ml-section">
+                <h3 class="ml-h">Captaincy</h3>
+                <div class="ml-cap-layout">
+                  <div>
+                    <p class="ml-note">Most-captained players across the league this season</p>
+                    <div class="ml-donut-wrap" id="ml-cap-donut-wrap">
+                      <canvas id="ml-cap-donut"></canvas>
+                      <div class="ml-donut-center" id="ml-donut-center"></div>
+                    </div>
+                  </div>
+                  <div>
+                    <p class="ml-note">Share of each manager's points that came from the captain</p>
+                    <div id="ml-cap-share"></div>
+                  </div>
+                </div>
+              </section>
+
+              <section class="ml-section">
+                <h3 class="ml-h">Highs &amp; lows</h3>
+                <p class="ml-note">Each bar spans a manager's worst to best gameweek; the dot is their average.</p>
+                <div id="ml-ranges"></div>
+              </section>
+
               <section class="ml-section">
                 <h3 class="ml-h">Gameweek heatmap</h3>
                 <p class="ml-note">Each column is coloured from that week's lowest (red) to highest (green) score. Hover a cell for captain, hits and bench points.</p>
@@ -268,7 +317,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="{% static 'fpldash/polygon.js' %}?v=6"></script>
-<script src="{% static 'fpldash/mini_league.js' %}?v=2"></script>
+<script src="{% static 'fpldash/mini_league.js' %}?v=3"></script>
 
 <script>
 // ── UTILS ──────────────────────────────────────────────────

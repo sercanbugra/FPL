@@ -287,6 +287,80 @@ def build_records(managers: list, weeks: dict, gameweeks: list) -> list:
     return records
 
 
+FORM_WINDOW = 3
+
+
+def build_insights(managers: list, weeks: dict, gameweeks: list) -> dict:
+    """
+    Extra season analytics, each a list sorted best-first:
+      h2h       every GW, each manager vs every rival: W/D/L, scored 3/1/0
+      form      points over the last FORM_WINDOW GWs vs the window before
+      captains  league-wide most-captained players, and each manager's captain share
+      ranges    lowest / average / highest weekly score per manager
+    """
+    def played(eid):
+        return [w for w in weeks[eid] if w["points"] is not None]
+
+    # Virtual head-to-head: compare each week's score against every rival who played it
+    h2h = {m["entry"]: {"entry": m["entry"], "w": 0, "d": 0, "l": 0} for m in managers}
+    for idx in range(len(gameweeks)):
+        scores = [(m["entry"], weeks[m["entry"]][idx]["points"]) for m in managers
+                  if weeks[m["entry"]][idx]["points"] is not None]
+        for eid, pts in scores:
+            for other, opts in scores:
+                if other == eid:
+                    continue
+                key = "w" if pts > opts else "d" if pts == opts else "l"
+                h2h[eid][key] += 1
+    for r in h2h.values():
+        games = r["w"] + r["d"] + r["l"]
+        r["points"] = r["w"] * 3 + r["d"]
+        r["win_pct"] = round(100 * r["w"] / games, 1) if games else 0.0
+    h2h_rows = sorted(h2h.values(), key=lambda r: (-r["points"], -r["win_pct"]))
+
+    form = []
+    for m in managers:
+        pts = [w["points"] for w in played(m["entry"])]
+        last = pts[-FORM_WINDOW:]
+        prev = pts[-2 * FORM_WINDOW:-FORM_WINDOW]
+        form.append({
+            "entry": m["entry"],
+            "last": sum(last),
+            "avg": round(sum(last) / len(last), 1) if last else 0.0,
+            "prev": sum(prev) if prev else None,
+            "series": pts[-6:],
+        })
+    form.sort(key=lambda r: -r["last"])
+
+    picks: dict = {}
+    share = []
+    for m in managers:
+        rows = played(m["entry"])
+        cap_pts = 0
+        for w in rows:
+            if w["captain"]:
+                c = picks.setdefault(w["captain"]["name"], {"name": w["captain"]["name"], "count": 0, "points": 0})
+                c["count"] += 1
+                c["points"] += w["captain"]["points"]
+                cap_pts += w["captain"]["points"]
+        total = sum(w["points"] for w in rows)
+        share.append({"entry": m["entry"], "captain_points": cap_pts, "total": total,
+                      "pct": round(100 * cap_pts / total, 1) if total > 0 else 0.0})
+    popular = sorted(picks.values(), key=lambda c: (-c["count"], -c["points"]))
+    share.sort(key=lambda r: -r["pct"])
+
+    ranges = []
+    for m in managers:
+        pts = [w["points"] for w in played(m["entry"])]
+        if pts:
+            ranges.append({"entry": m["entry"], "min": min(pts), "max": max(pts),
+                           "avg": round(sum(pts) / len(pts), 1)})
+    ranges.sort(key=lambda r: -r["avg"])
+
+    return {"h2h": h2h_rows, "form": form, "form_window": FORM_WINDOW,
+            "captains": {"popular": popular, "share": share}, "ranges": ranges}
+
+
 # ---------- Assembly ----------
 
 def get_mini_league(league_id: int) -> dict:
@@ -339,4 +413,5 @@ def get_mini_league(league_id: int) -> dict:
         "records": build_records(managers, weeks, gameweeks),
         "chips": build_chips(managers, histories, weeks, gameweeks, bootstrap.get("chips", []),
                              gameweeks[-1] if gameweeks else None),
+        "insights": build_insights(managers, weeks, gameweeks),
     }

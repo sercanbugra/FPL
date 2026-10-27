@@ -388,3 +388,30 @@ class MiniLeagueChipsTests(TestCase):
 
         later = build_chips(managers, histories, weeks, gws, chip_defs, current_gw=25)
         self.assertEqual(later["rows"][1]["cells"][0]["status"], "expired")
+
+
+class MiniLeagueInsightsTests(TestCase):
+    def test_insights(self):
+        from fpldash.mini_league import build_weeks, build_insights
+        managers, histories, captains, gws = _mini_league_fixture()
+        weeks = build_weeks(managers, histories, captains, gws)
+        ins = build_insights(managers, weeks, gws)
+
+        h2h = {r["entry"]: r for r in ins["h2h"]}
+        # GW1: Bravo 60 beats Alpha 40 (Late absent). GW2: Alpha 86 > Bravo 50 > Late 30.
+        self.assertEqual((h2h[1]["w"], h2h[1]["d"], h2h[1]["l"], h2h[1]["points"]), (2, 0, 1, 6))
+        self.assertEqual((h2h[3]["w"], h2h[3]["l"]), (0, 2))
+        self.assertEqual(ins["h2h"][0]["entry"], 1)
+
+        self.assertEqual(ins["form"][0]["entry"], 1)
+        self.assertEqual(ins["form"][0]["last"], 126)
+        self.assertEqual(ins["form"][0]["series"], [40, 86])
+
+        popular = ins["captains"]["popular"]
+        self.assertEqual(popular[0]["name"], "Haaland")
+        share = {r["entry"]: r for r in ins["captains"]["share"]}
+        self.assertEqual(share[1]["captain_points"], 36)
+        self.assertEqual(share[1]["pct"], round(100 * 36 / 126, 1))
+
+        ranges = {r["entry"]: r for r in ins["ranges"]}
+        self.assertEqual((ranges[1]["min"], ranges[1]["max"], ranges[1]["avg"]), (40, 86, 63.0))
