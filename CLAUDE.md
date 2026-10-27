@@ -84,7 +84,7 @@ and each worker keeps its own separate cache.
    `entry/{id}/event/{gw}/picks/` for every GW, scored with `event/{gw}/live/`. That's
    roughly managers × GWs requests (capped at `MAX_MANAGERS`), fetched in parallel.
    Responses for *finished* GWs are cached permanently because they never change.
-   Everything else uses the usual 30-min TTL. `build_weeks` / `build_awards` /
+   Everything else uses the usual 30-min TTL. `build_weeks` / `build_awards` / `build_chips` /
    `build_records` are pure and tested without the network.
 7. `fpldash/views.py` is kept thin. Each `api_*` view builds data via the modules above
    and returns `JsonResponse`. Business logic beyond request parsing and error wrapping

@@ -345,6 +345,57 @@
     document.getElementById('ml-heatmap').innerHTML = `<table class="ml-hm-table"><thead>${head}</thead><tbody>${body}</tbody></table>`;
   }
 
+  // ── CHIPS TABLE ──
+  function renderChips() {
+    const wrap = document.getElementById('ml-chips');
+    const chips = ML.chips || { slots: [], rows: [] };
+    if (!chips.slots.length) { wrap.innerHTML = '<p class="text-muted small">No chip data.</p>'; return; }
+
+    // Group consecutive slots of the same chip under one header (one per season half)
+    const groups = [];
+    chips.slots.forEach(s => {
+      const g = groups[groups.length - 1];
+      if (g && g.name === s.name) g.span += 1; else groups.push({ name: s.name, label: s.label, span: 1 });
+    });
+    const last = ML.gameweeks.length - 1;
+    const byEntry = new Map(chips.rows.map(r => [r.entry, r]));
+    const rows = [...ML.managers].sort((a, b) => week(a.entry, last).league_rank - week(b.entry, last).league_rank);
+
+    function cell(c, s, delay) {
+      const style = `animation-delay:${delay}ms`;
+      if (c.status === 'used') {
+        const pts = c.points === null || c.points === undefined ? '' : ` · ${c.points} pts`;
+        return `<td><span class="ml-chip-pill chip-${s.name}" style="${style}">GW${c.gw}${pts}</span></td>`;
+      }
+      const text = { available: 'Available', upcoming: `Opens GW${s.start}`, expired: 'Expired' }[c.status];
+      return `<td><span class="ml-chip-state ${c.status}" style="${style}">${text}</span></td>`;
+    }
+
+    wrap.innerHTML = `
+      <table class="ml-chip-table">
+        <thead>
+          <tr>
+            <th rowspan="2" class="ml-hm-team">Team</th>
+            ${groups.map(g => `<th colspan="${g.span}" class="ml-chip-head chip-${g.name}">${esc(g.label)}</th>`).join('')}
+            <th rowspan="2">Used</th>
+          </tr>
+          <tr>${chips.slots.map(s => `<th class="ml-chip-half">GW${s.start}–${s.stop}</th>`).join('')}</tr>
+        </thead>
+        <tbody>
+          ${rows.map((m, r) => {
+            const row = byEntry.get(m.entry);
+            if (!row) return '';
+            return `
+              <tr class="${m.entry === myEntry ? 'me' : ''}">
+                <td class="ml-hm-team">${managerChip(m.entry)}</td>
+                ${row.cells.map((c, i) => cell(c, chips.slots[i], (r * row.cells.length + i) * 15)).join('')}
+                <td class="ml-chip-used">${row.used}<small>/${chips.slots.length}</small></td>
+              </tr>`;
+          }).join('')}
+        </tbody>
+      </table>`;
+  }
+
   // ── SEASON RECORDS ──
   function renderRecords() {
     const grid = document.getElementById('ml-records');
@@ -404,6 +455,7 @@
       raceStep(0);
       onVisible(document.getElementById('ml-race'), () => playRace(true));
       onVisible(document.getElementById('ml-bump-wrap'), renderBump);
+      renderChips();
       renderRecords();
     } catch (e) {
       loaded = false;

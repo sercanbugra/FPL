@@ -180,6 +180,48 @@ def build_awards(managers: list, weeks: dict, gameweeks: list, gw: int) -> list:
 
 CHIP_NAMES = {"wildcard": "Wildcard", "freehit": "Free Hit", "bboost": "Bench Boost",
               "3xc": "Triple Captain", "manager": "Assistant Manager"}
+CHIP_ORDER = ["wildcard", "freehit", "bboost", "3xc", "manager"]
+
+
+def build_chips(managers: list, histories: dict, weeks: dict, gameweeks: list,
+                chip_defs: list, current_gw: int) -> dict:
+    """
+    Chip usage grid: one slot per chip *window* from bootstrap `chips`
+    (each chip comes once per half-season), and per manager a cell per slot:
+    used (with GW and that GW's net points), available, upcoming or expired.
+    """
+    slots = sorted(
+        ({"name": c["name"], "label": CHIP_NAMES.get(c["name"], c["name"]),
+          "start": c.get("start_event", 1), "stop": c.get("stop_event", 38)}
+         for c in chip_defs),
+        key=lambda s: (CHIP_ORDER.index(s["name"]) if s["name"] in CHIP_ORDER else 99, s["start"]),
+    )
+    if not slots:
+        # Older bootstrap without chip windows: one season-long slot per chip seen
+        seen = {c["name"] for h in histories.values() if h for c in h.get("chips", [])}
+        slots = [{"name": n, "label": CHIP_NAMES.get(n, n), "start": 1, "stop": 38}
+                 for n in sorted(seen, key=lambda n: CHIP_ORDER.index(n) if n in CHIP_ORDER else 99)]
+
+    rows = []
+    for m in managers:
+        eid = m["entry"]
+        used = [(c["name"], c["event"]) for c in ((histories.get(eid) or {}).get("chips") or [])]
+        cells = []
+        for s in slots:
+            gw = next((ev for name, ev in used if name == s["name"] and s["start"] <= ev <= s["stop"]), None)
+            if gw is not None:
+                pts = None
+                if gw in gameweeks:
+                    pts = weeks[eid][gameweeks.index(gw)]["points"]
+                cells.append({"status": "used", "gw": gw, "points": pts})
+            elif current_gw is not None and current_gw > s["stop"]:
+                cells.append({"status": "expired"})
+            elif current_gw is not None and current_gw < s["start"]:
+                cells.append({"status": "upcoming"})
+            else:
+                cells.append({"status": "available"})
+        rows.append({"entry": eid, "used": sum(c["status"] == "used" for c in cells), "cells": cells})
+    return {"slots": slots, "rows": rows}
 
 
 def build_records(managers: list, weeks: dict, gameweeks: list) -> list:
@@ -295,4 +337,6 @@ def get_mini_league(league_id: int) -> dict:
         "weeks": {str(eid): rows for eid, rows in weeks.items()},
         "awards": {str(gw): build_awards(managers, weeks, gameweeks, gw) for gw in gameweeks},
         "records": build_records(managers, weeks, gameweeks),
+        "chips": build_chips(managers, histories, weeks, gameweeks, bootstrap.get("chips", []),
+                             gameweeks[-1] if gameweeks else None),
     }

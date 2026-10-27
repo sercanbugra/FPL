@@ -1472,6 +1472,46 @@ div.dataTables_wrapper .dataTables_paginate .paginate_button:hover {
 .ml-team { font-weight: 600; }
 .ml-team.me::after { content: " ★"; color: #f59e0b; }
 
+/* Chips table */
+.ml-chips { overflow-x: auto; }
+.ml-chip-table { border-collapse: separate; border-spacing: 3px; font-size: 0.76rem; width: 100%; }
+.ml-chip-table th {
+  font-size: 0.66rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--muted);
+  text-align: center;
+  padding: 4px;
+  white-space: nowrap;
+}
+.ml-chip-table td { text-align: center; padding: 3px; white-space: nowrap; }
+.ml-chip-table .ml-hm-team { text-align: left; }
+.ml-chip-table tr.me td.ml-hm-team .ml-team { color: var(--primary); font-weight: 800; }
+.ml-chip-head { color: #fff !important; border-radius: 4px 4px 0 0; }
+.ml-chip-half { font-weight: 600 !important; text-transform: none !important; }
+.ml-chip-used { font-weight: 800; font-variant-numeric: tabular-nums; }
+.ml-chip-used small { color: var(--muted); font-weight: 600; }
+
+.ml-chip-pill, .ml-chip-state {
+  display: inline-block;
+  min-width: 86px;
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-weight: 700;
+  animation: ml-cell 0.4s ease both;
+}
+.ml-chip-pill { color: #fff; box-shadow: inset 0 -2px 0 rgba(0,0,0,0.15); }
+.ml-chip-state { font-weight: 600; font-size: 0.7rem; }
+.ml-chip-state.available { color: var(--success); background: #dcfce7; }
+.ml-chip-state.upcoming  { color: var(--muted); background: var(--bg-base); }
+.ml-chip-state.expired   { color: var(--danger); background: #fee2e2; text-decoration: line-through; }
+
+.chip-wildcard { background: #7c3aed; }
+.chip-freehit  { background: #0891b2; }
+.chip-bboost   { background: #ea580c; }
+.chip-3xc      { background: #db2777; }
+.chip-manager  { background: #4f46e5; }
+
 /* Season records */
 .ml-records { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
 .ml-record {
@@ -1498,7 +1538,8 @@ div.dataTables_wrapper .dataTables_paginate .paginate_button:hover {
 .ml-record-detail { font-size: 0.72rem; color: var(--muted); margin-top: 4px; }
 
 @media (prefers-reduced-motion: reduce) {
-  .ml-hero, .ml-tile, .ml-slide, .ml-slide > *, .ml-podium-bar, .ml-hm-cell, .ml-records.in .ml-record {
+  .ml-hero, .ml-tile, .ml-slide, .ml-slide > *, .ml-podium-bar, .ml-hm-cell, .ml-records.in .ml-record,
+  .ml-chip-pill, .ml-chip-state {
     animation: none !important;
   }
   .ml-record { opacity: 1; }

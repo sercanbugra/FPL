@@ -365,3 +365,26 @@ class MiniLeagueTests(TestCase):
     def test_api_mini_league_rejects_bad_id(self):
         resp = Client().get("/api/mini-league", {"id": "abc"})
         self.assertEqual(resp.status_code, 400)
+
+
+class MiniLeagueChipsTests(TestCase):
+    def test_chip_grid_statuses(self):
+        from fpldash.mini_league import build_weeks, build_chips
+        managers, histories, captains, gws = _mini_league_fixture()
+        weeks = build_weeks(managers, histories, captains, gws)
+        chip_defs = [
+            {"name": "3xc", "start_event": 1, "stop_event": 19},
+            {"name": "wildcard", "start_event": 20, "stop_event": 38},
+            {"name": "wildcard", "start_event": 2, "stop_event": 19},
+        ]
+        grid = build_chips(managers, histories, weeks, gws, chip_defs, current_gw=2)
+        # Ordered wildcard (both halves, by start) then triple captain
+        self.assertEqual([(s["name"], s["start"]) for s in grid["slots"]],
+                         [("wildcard", 2), ("wildcard", 20), ("3xc", 1)])
+        alpha = grid["rows"][0]
+        self.assertEqual([c["status"] for c in alpha["cells"]], ["available", "upcoming", "used"])
+        self.assertEqual((alpha["cells"][2]["gw"], alpha["cells"][2]["points"]), (2, 86))
+        self.assertEqual(alpha["used"], 1)
+
+        later = build_chips(managers, histories, weeks, gws, chip_defs, current_gw=25)
+        self.assertEqual(later["rows"][1]["cells"][0]["status"], "expired")
