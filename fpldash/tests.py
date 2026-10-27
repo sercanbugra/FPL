@@ -301,7 +301,7 @@ class LeagueViewTests(TestCase):
     def test_index_page_has_table_and_fixtures_tabs(self):
         resp = self.client.get("/")
         self.assertIn(b'data-tab="table"', resp.content)
-        self.assertIn(b'data-tab="fixtures"', resp.content)
+        self.assertIn(b'id="fixtures-wrap"', resp.content)
 
 
 def _mini_league_fixture():

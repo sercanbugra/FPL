@@ -966,8 +966,39 @@ div.dataTables_wrapper .dataTables_paginate .paginate_button:hover {
 .squad-card .player-card { background: #fff; }
 
 /* ============================================================
-   PL TABLE TAB
+   TABLE & FIXTURES TAB
    ============================================================ */
+/* Side by side when there's room (each column scrolls on its own),
+   stacked with one scroll for the whole pane when there isn't. */
+.tf-layout {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(340px, 1fr);
+}
+
+.tf-col {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+.tf-col + .tf-col { border-left: 1px solid var(--border); }
+
+.tf-title {
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: var(--text);
+  line-height: 31px;
+}
+
+@media (max-width: 1250px) {
+  .tf-layout { display: block; overflow-y: auto; }
+  .tf-col + .tf-col { border-left: none; border-top: 1px solid var(--border); }
+  .tf-layout .league-wrap,
+  .tf-layout .fixtures-wrap { overflow: visible; }
+}
+
 .league-wrap {
   flex: 1 1 auto;
   overflow: auto;

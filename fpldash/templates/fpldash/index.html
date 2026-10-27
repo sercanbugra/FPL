@@ -10,7 +10,7 @@
   <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
   <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.1/css/buttons.dataTables.min.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.3.0/css/bootstrap.min.css">
-  <link rel="stylesheet" href="{% static 'fpldash/style.css' %}?v=23">
+  <link rel="stylesheet" href="{% static 'fpldash/style.css' %}?v=24">
 </head>
 
 <body>
@@ -55,8 +55,7 @@
         <button class="tab-btn"        data-tab="forecast">GW Forecast</button>
         <button class="tab-btn"        data-tab="polygon">Polygon Filter</button>
         <button class="tab-btn"        data-tab="builder">Squad Builder</button>
-        <button class="tab-btn"        data-tab="table">PL Table</button>
-        <button class="tab-btn"        data-tab="fixtures">Fixtures</button>
+        <button class="tab-btn"        data-tab="table">Table &amp; Fixtures</button>
         <button class="tab-btn"        data-tab="league">Mini League</button>
       </nav>
 
@@ -116,23 +115,26 @@
           </div>
         </div>
 
-        <!-- TAB 5: Premier League Table -->
+        <!-- TAB 5: Premier League Table + Gameweek Fixtures -->
         <div class="tab-pane" id="pane-table">
-          <div class="league-wrap" id="league-wrap">
-            <div class="spinner"><div class="spin"></div> Loading table…</div>
-          </div>
-        </div>
-
-        <!-- TAB 6: Gameweek Fixtures -->
-        <div class="tab-pane" id="pane-fixtures">
-          <div class="builder-toolbar fixtures-toolbar">
-            <button id="fxPrevBtn" class="btn btn-outline-secondary btn-sm" aria-label="Previous gameweek">&lsaquo;</button>
-            <span class="fx-gw-label" id="fxGwLabel">Gameweek —</span>
-            <button id="fxNextBtn" class="btn btn-outline-secondary btn-sm" aria-label="Next gameweek">&rsaquo;</button>
-            <span class="builder-hint" id="fxDeadline"></span>
-          </div>
-          <div class="fixtures-wrap" id="fixtures-wrap">
-            <div class="spinner"><div class="spin"></div> Loading fixtures…</div>
+          <div class="tf-layout">
+            <div class="tf-col tf-table">
+              <div class="builder-toolbar"><span class="tf-title">Premier League Table</span></div>
+              <div class="league-wrap" id="league-wrap">
+                <div class="spinner"><div class="spin"></div> Loading table…</div>
+              </div>
+            </div>
+            <div class="tf-col tf-fixtures">
+              <div class="builder-toolbar fixtures-toolbar">
+                <button id="fxPrevBtn" class="btn btn-outline-secondary btn-sm" aria-label="Previous gameweek">&lsaquo;</button>
+                <span class="fx-gw-label" id="fxGwLabel">Gameweek —</span>
+                <button id="fxNextBtn" class="btn btn-outline-secondary btn-sm" aria-label="Next gameweek">&rsaquo;</button>
+                <span class="builder-hint" id="fxDeadline"></span>
+              </div>
+              <div class="fixtures-wrap" id="fixtures-wrap">
+                <div class="spinner"><div class="spin"></div> Loading fixtures…</div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -241,7 +243,6 @@
   <button class="mnav-btn"        data-msec="polygon">Filter</button>
   <button class="mnav-btn"        data-msec="builder">Build</button>
   <button class="mnav-btn"        data-msec="table">Table</button>
-  <button class="mnav-btn"        data-msec="fixtures">Fixtures</button>
   <button class="mnav-btn"        data-msec="league">League</button>
 </nav>
 
@@ -306,8 +307,7 @@ function setupTabs() {
         $('#forecastTable').DataTable().columns.adjust();
       }
       if (btn.dataset.tab === 'builder') ensureBuilderLoaded();
-      if (btn.dataset.tab === 'table') ensureLeagueTableLoaded();
-      if (btn.dataset.tab === 'fixtures') ensureFixturesLoaded();
+      if (btn.dataset.tab === 'table') { ensureLeagueTableLoaded(); ensureFixturesLoaded(); }
       if (btn.dataset.tab === 'league') ensureMiniLeagueLoaded();
     });
   });
@@ -1086,7 +1086,7 @@ function setupMobileNav() {
       mainContent.classList.add('mob-visible');
       // Activate the matching main tab
       const tabMap = { stats: 'stats', forecast: 'forecast', polygon: 'polygon', builder: 'builder',
-                       table: 'table', fixtures: 'fixtures', league: 'league' };
+                       table: 'table', league: 'league' };
       const tabName = tabMap[sec];
       if (tabName) {
         document.querySelectorAll('.main-tabs .tab-btn').forEach(b => b.classList.remove('active'));
@@ -1101,8 +1101,7 @@ function setupMobileNav() {
         if (tabName === 'forecast' && $.fn.dataTable.isDataTable('#forecastTable'))
           $('#forecastTable').DataTable().columns.adjust();
         if (tabName === 'builder') ensureBuilderLoaded();
-        if (tabName === 'table') ensureLeagueTableLoaded();
-        if (tabName === 'fixtures') ensureFixturesLoaded();
+        if (tabName === 'table') { ensureLeagueTableLoaded(); ensureFixturesLoaded(); }
         if (tabName === 'league') ensureMiniLeagueLoaded();
       }
     }
@@ -1140,10 +1139,11 @@ window.onload = async function() {
   document.getElementById('fxPrevBtn').addEventListener('click', () => loadFixtures(window._fixturesGw - 1));
   document.getElementById('fxNextBtn').addEventListener('click', () => loadFixtures(window._fixturesGw + 1));
 
-  // Deep link: /#league, /#fixtures … opens that tab directly
-  const hashTab = document.querySelector(`.main-tabs .tab-btn[data-tab="${location.hash.slice(1)}"]`);
+  // Deep link: /#league, /#table … opens that tab directly (#fixtures now lives in #table)
+  const hashName = { fixtures: 'table' }[location.hash.slice(1)] || location.hash.slice(1);
+  const hashTab = document.querySelector(`.main-tabs .tab-btn[data-tab="${hashName}"]`);
   if (hashTab) hashTab.click();
-  const hashSec = document.querySelector(`.mnav-btn[data-msec="${location.hash.slice(1)}"]`);
+  const hashSec = document.querySelector(`.mnav-btn[data-msec="${hashName}"]`);
   if (hashSec) hashSec.click();  // only has a listener on phones
 
   // Load in parallel — team & table first (visible), then rest

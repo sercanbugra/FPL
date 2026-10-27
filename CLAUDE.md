@@ -101,8 +101,8 @@ and each worker keeps its own separate cache.
    step). The layout is a left **My Squad** sidebar (team-ID input, resizable) plus main
    tabs: Player Stats (`/api/data`), GW Forecast (`/api/forecast`), Polygon Filter (a
    radar chart whose metrics are read dynamically from `/api/data`, with no hardcoded
-   whitelist) and Squad Builder (`/api/squad-builder`), PL Table (`/api/table`), Fixtures
-   (`/api/fixtures?gw=`) and Mini League (`/api/mini-league`, an animated report).
+   whitelist) and Squad Builder (`/api/squad-builder`), Table & Fixtures (league table from
+   `/api/table` beside the GW fixtures from `/api/fixtures?gw=`; `#fixtures` aliases it) and Mini League (`/api/mini-league`, an animated report).
    `/#<tab>` deep-links to a tab. Static asset URLs carry a `?v=N` cache-buster, so bump
    it when you edit a CSS/JS file. A right rail (Price Changes /
    Smart Picks) shows only alongside Player Stats. All server communication is plain
