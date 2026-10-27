@@ -12,7 +12,7 @@ from .cache import get_bootstrap, get_fixtures, compute_team_fdr
 from .fpl_data import get_fpl_data
 from .forecast import get_forecast_data
 from .league import compute_league_table, get_gameweek_fixtures
-from .mini_league import get_mini_league
+from .mini_league import get_mini_league, get_global_captaincy
 from .ml_predictions import get_ml_predicted_scores
 from .squad_builder import build_squads
 
@@ -240,6 +240,14 @@ def api_mini_league(request):
         data = get_mini_league(league_id)
         data["my_entry"] = int(TEAM_ID) if str(TEAM_ID).isdigit() else None
         return JsonResponse(data)
+    except Exception as ex:
+        return JsonResponse({"error": str(ex)}, status=500)
+
+
+def api_captaincy(request):
+    """Estimated worldwide captain split for the current GW (sampled; see mini_league.py)."""
+    try:
+        return JsonResponse(get_global_captaincy())
     except Exception as ex:
         return JsonResponse({"error": str(ex)}, status=500)
 

@@ -10,7 +10,7 @@
   <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
   <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.1/css/buttons.dataTables.min.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.3.0/css/bootstrap.min.css">
-  <link rel="stylesheet" href="{% static 'fpldash/style.css' %}?v=25">
+  <link rel="stylesheet" href="{% static 'fpldash/style.css' %}?v=26">
 </head>
 
 <body>
@@ -201,28 +201,23 @@
                 </section>
               </div>
 
-              <div class="ml-grid2">
-                <section class="ml-section">
-                  <h3 class="ml-h">Virtual H2H league</h3>
-                  <p class="ml-note">Every week, every score is compared against every rival's: win 3, draw 1, loss 0.</p>
-                  <div id="ml-h2h"></div>
-                </section>
-                <section class="ml-section">
-                  <h3 class="ml-h">Hot form</h3>
-                  <p class="ml-note" id="ml-form-note"></p>
-                  <div id="ml-form"></div>
-                </section>
-              </div>
+              <section class="ml-section">
+                <h3 class="ml-h">Hot form</h3>
+                <p class="ml-note" id="ml-form-note"></p>
+                <div id="ml-form"></div>
+              </section>
 
               <section class="ml-section">
                 <h3 class="ml-h">Captaincy</h3>
                 <div class="ml-cap-layout">
                   <div>
-                    <p class="ml-note">Most-captained players across the league this season</p>
+                    <p class="ml-note" id="ml-cap-global-note">Worldwide captain picks this gameweek</p>
                     <div class="ml-donut-wrap" id="ml-cap-donut-wrap">
                       <canvas id="ml-cap-donut"></canvas>
                       <div class="ml-donut-center" id="ml-donut-center"></div>
+                      <div class="ml-donut-status" id="ml-donut-status"></div>
                     </div>
+                    <p class="ml-note ml-cap-foot" id="ml-cap-global-foot"></p>
                   </div>
                   <div>
                     <p class="ml-note">Share of each manager's points that came from the captain</p>
@@ -317,7 +312,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="{% static 'fpldash/polygon.js' %}?v=6"></script>
-<script src="{% static 'fpldash/mini_league.js' %}?v=3"></script>
+<script src="{% static 'fpldash/mini_league.js' %}?v=4"></script>
 
 <script>
 // ── UTILS ──────────────────────────────────────────────────

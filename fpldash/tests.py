@@ -397,21 +397,45 @@ class MiniLeagueInsightsTests(TestCase):
         weeks = build_weeks(managers, histories, captains, gws)
         ins = build_insights(managers, weeks, gws)
 
-        h2h = {r["entry"]: r for r in ins["h2h"]}
-        # GW1: Bravo 60 beats Alpha 40 (Late absent). GW2: Alpha 86 > Bravo 50 > Late 30.
-        self.assertEqual((h2h[1]["w"], h2h[1]["d"], h2h[1]["l"], h2h[1]["points"]), (2, 0, 1, 6))
-        self.assertEqual((h2h[3]["w"], h2h[3]["l"]), (0, 2))
-        self.assertEqual(ins["h2h"][0]["entry"], 1)
-
         self.assertEqual(ins["form"][0]["entry"], 1)
         self.assertEqual(ins["form"][0]["last"], 126)
         self.assertEqual(ins["form"][0]["series"], [40, 86])
 
-        popular = ins["captains"]["popular"]
-        self.assertEqual(popular[0]["name"], "Haaland")
-        share = {r["entry"]: r for r in ins["captains"]["share"]}
+        share = {r["entry"]: r for r in ins["captain_share"]}
         self.assertEqual(share[1]["captain_points"], 36)
         self.assertEqual(share[1]["pct"], round(100 * 36 / 126, 1))
 
         ranges = {r["entry"]: r for r in ins["ranges"]}
         self.assertEqual((ranges[1]["min"], ranges[1]["max"], ranges[1]["avg"]), (40, 86, 63.0))
+
+
+class GlobalCaptaincyTests(TestCase):
+    def test_sample_pages_span_all_ranks(self):
+        from fpldash.mini_league import sample_pages
+        pages = sample_pages(1_000_000, n=5)
+        self.assertEqual(pages[0], 1)
+        self.assertEqual(pages[-1], 20_000)  # last page of 1M ranks at 50 per page
+        self.assertEqual(len(pages), 5)
+        self.assertEqual(sample_pages(30), [1])
+
+    def test_summarize_captains(self):
+        from fpldash.mini_league import summarize_captains
+        players = {10: {"name": "Haaland", "team": "MCI"}, 20: {"name": "Salah", "team": "LIV"}}
+
+        def picks(cap, chip=None):
+            return {"active_chip": chip, "picks": [{"element": 99, "is_captain": False},
+                                                   {"element": cap, "is_captain": True}]}
+
+        rows, total, triple = summarize_captains(
+            [picks(10), picks(10, "3xc"), picks(20), None, {"picks": []}], players)
+        self.assertEqual(total, 3)  # inactive/missing teams are not counted
+        self.assertEqual(triple, 1)
+        self.assertEqual([(r["name"], r["count"], r["pct"]) for r in rows],
+                         [("Haaland", 2, 66.7), ("Salah", 1, 33.3)])
+
+    @override_settings(SECURE_SSL_REDIRECT=False)
+    def test_api_captaincy_passes_through(self):
+        canned = {"status": "pending", "gameweek": 8, "sample_target": 400}
+        with patch("fpldash.views.get_global_captaincy", return_value=canned):
+            resp = Client().get("/api/captaincy")
+        self.assertEqual(resp.json(), canned)

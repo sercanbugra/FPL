@@ -11,6 +11,7 @@ urlpatterns = [
     path("api/table", views.api_table, name="api_table"),
     path("api/fixtures", views.api_fixtures, name="api_fixtures"),
     path("api/mini-league", views.api_mini_league, name="api_mini_league"),
+    path("api/captaincy", views.api_captaincy, name="api_captaincy"),
     path("api/player-summary/<int:player_id>", views.api_player_summary, name="api_player_summary"),
     path("api/pricechanges", views.api_pricechanges, name="api_pricechanges"),
     path("api/pricechanges_fpl", views.api_pricechanges_fpl, name="api_pricechanges_fpl"),

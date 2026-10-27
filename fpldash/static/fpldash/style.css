@@ -1575,24 +1575,6 @@ div.dataTables_wrapper .dataTables_paginate .paginate_button:hover {
 
 .ml-chart-wrap { position: relative; height: 260px; }
 
-.ml-mini-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
-.ml-mini-table th {
-  font-size: 0.66rem; font-weight: 700; text-transform: uppercase; color: var(--muted);
-  text-align: center; padding: 4px; border-bottom: 1px solid var(--border);
-}
-.ml-mini-table td { text-align: center; padding: 5px 4px; border-bottom: 1px solid var(--border); font-variant-numeric: tabular-nums; }
-.ml-mini-table tbody tr { animation: ml-rise 0.45s ease both; }
-.ml-mini-table tr:last-child td { border-bottom: none; }
-.ml-mini-table .ml-hm-team { text-align: left; white-space: nowrap; max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
-.ml-mini-table tr.me td { background: #fffbeb; }
-.ml-mini-pts { font-weight: 800; }
-.ml-pct-col { width: 34%; }
-.ml-pct { position: relative; height: 18px; background: var(--bg-base); border-radius: 4px; overflow: hidden; }
-.ml-pct span { position: absolute; inset: 0 auto 0 0; width: var(--w); opacity: 0.35; animation: ml-bar-grow 1s cubic-bezier(.2,.8,.2,1) both; }
-.ml-pct b { position: relative; font-size: 0.7rem; line-height: 18px; }
-
-@keyframes ml-bar-grow { from { width: 0; } }
-
 .ml-form-row {
   display: grid;
   grid-template-columns: 22px minmax(0, 1fr) 90px 70px 56px;
@@ -1630,6 +1612,19 @@ div.dataTables_wrapper .dataTables_paginate .paginate_button:hover {
   align-items: center;
   pointer-events: none;
 }
+.ml-donut-status {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-size: 0.78rem;
+  pointer-events: none;
+}
+.ml-donut-status:empty { display: none; }
+.ml-cap-foot { margin: 8px 0 0; line-height: 1.5; }
+.ml-cap-foot b { color: var(--text); }
 .ml-donut-center b { font-size: 1.6rem; font-weight: 900; color: var(--text); line-height: 1; }
 .ml-donut-center span { font-size: 0.72rem; color: var(--muted); font-weight: 600; }
 
@@ -1682,7 +1677,7 @@ div.dataTables_wrapper .dataTables_paginate .paginate_button:hover {
 
 @media (prefers-reduced-motion: reduce) {
   .ml-hero, .ml-tile, .ml-slide, .ml-slide > *, .ml-podium-bar, .ml-hm-cell, .ml-records.in .ml-record,
-  .ml-chip-pill, .ml-chip-state, .ml-mini-table tbody tr, .ml-pct span, .ml-form-row, .ml-spark polyline {
+  .ml-chip-pill, .ml-chip-state, .ml-form-row, .ml-spark polyline {
     animation: none !important;
   }
   .ml-spark polyline { stroke-dashoffset: 0; }

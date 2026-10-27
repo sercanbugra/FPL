@@ -86,6 +86,12 @@ and each worker keeps its own separate cache.
    Responses for *finished* GWs are cached permanently because they never change.
    Everything else uses the usual 30-min TTL. `build_weeks` / `build_awards` / `build_chips` / `build_insights` /
    `build_records` are pure and tested without the network.
+   The same module also serves `/api/captaincy`, the worldwide captain split. FPL has no
+   endpoint for that distribution, so it's *estimated* by sampling ~400 managers
+   evenly across the overall league (id 314). FPL throttles to ~10 req/s, so a sample
+   takes ~30–45 s. It runs once per GW in a background thread (picks lock at the
+   deadline), and the endpoint returns `{"status": "pending"}` until it's done, so the
+   frontend polls.
 7. `fpldash/views.py` is kept thin. Each `api_*` view builds data via the modules above
    and returns `JsonResponse`. Business logic beyond request parsing and error wrapping
    doesn't belong here. A few views call the FPL API directly and are **uncached**:

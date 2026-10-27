@@ -293,30 +293,12 @@ FORM_WINDOW = 3
 def build_insights(managers: list, weeks: dict, gameweeks: list) -> dict:
     """
     Extra season analytics, each a list sorted best-first:
-      h2h       every GW, each manager vs every rival: W/D/L, scored 3/1/0
       form      points over the last FORM_WINDOW GWs vs the window before
       captains  league-wide most-captained players, and each manager's captain share
       ranges    lowest / average / highest weekly score per manager
     """
     def played(eid):
         return [w for w in weeks[eid] if w["points"] is not None]
-
-    # Virtual head-to-head: compare each week's score against every rival who played it
-    h2h = {m["entry"]: {"entry": m["entry"], "w": 0, "d": 0, "l": 0} for m in managers}
-    for idx in range(len(gameweeks)):
-        scores = [(m["entry"], weeks[m["entry"]][idx]["points"]) for m in managers
-                  if weeks[m["entry"]][idx]["points"] is not None]
-        for eid, pts in scores:
-            for other, opts in scores:
-                if other == eid:
-                    continue
-                key = "w" if pts > opts else "d" if pts == opts else "l"
-                h2h[eid][key] += 1
-    for r in h2h.values():
-        games = r["w"] + r["d"] + r["l"]
-        r["points"] = r["w"] * 3 + r["d"]
-        r["win_pct"] = round(100 * r["w"] / games, 1) if games else 0.0
-    h2h_rows = sorted(h2h.values(), key=lambda r: (-r["points"], -r["win_pct"]))
 
     form = []
     for m in managers:
@@ -332,21 +314,13 @@ def build_insights(managers: list, weeks: dict, gameweeks: list) -> dict:
         })
     form.sort(key=lambda r: -r["last"])
 
-    picks: dict = {}
     share = []
     for m in managers:
         rows = played(m["entry"])
-        cap_pts = 0
-        for w in rows:
-            if w["captain"]:
-                c = picks.setdefault(w["captain"]["name"], {"name": w["captain"]["name"], "count": 0, "points": 0})
-                c["count"] += 1
-                c["points"] += w["captain"]["points"]
-                cap_pts += w["captain"]["points"]
+        cap_pts = sum(w["captain"]["points"] for w in rows if w["captain"])
         total = sum(w["points"] for w in rows)
         share.append({"entry": m["entry"], "captain_points": cap_pts, "total": total,
                       "pct": round(100 * cap_pts / total, 1) if total > 0 else 0.0})
-    popular = sorted(picks.values(), key=lambda c: (-c["count"], -c["points"]))
     share.sort(key=lambda r: -r["pct"])
 
     ranges = []
@@ -357,8 +331,117 @@ def build_insights(managers: list, weeks: dict, gameweeks: list) -> dict:
                            "avg": round(sum(pts) / len(pts), 1)})
     ranges.sort(key=lambda r: -r["avg"])
 
-    return {"h2h": h2h_rows, "form": form, "form_window": FORM_WINDOW,
-            "captains": {"popular": popular, "share": share}, "ranges": ranges}
+    return {"form": form, "form_window": FORM_WINDOW, "captain_share": share, "ranges": ranges}
+
+
+# ---------- Global captaincy (sampled) ----------
+
+OVERALL_LEAGUE = 314  # FPL's "Overall" classic league: every ranked manager
+SAMPLE_PAGES = 8      # x 50 managers per standings page
+
+# FPL throttles to roughly 10 requests/s, so a ~400-manager sample takes
+# ~35s. Picks are locked at the deadline, so one sample per GW is final:
+# it's computed once in a background thread and kept for the process life.
+_cap_lock = threading.Lock()
+_cap_results: dict = {}   # gw -> finished result
+_cap_running: set = set()
+
+
+def sample_pages(ranked_count: int, n: int = SAMPLE_PAGES) -> list:
+    """Standings pages spread evenly from rank 1 to the last ranked manager."""
+    last = max(1, ranked_count // 50)
+    if n <= 1 or last == 1:
+        return [1]
+    return sorted({1 + round(i * (last - 1) / (n - 1)) for i in range(n)})
+
+
+def summarize_captains(picks_list: list, players: dict) -> tuple[list, int, int]:
+    """
+    Captain distribution from a list of `picks` payloads.
+    `players` is {element_id: {"name", "team"}}. Returns (rows sorted by share,
+    managers counted, how many of them played Triple Captain).
+    """
+    counts: dict = {}
+    triple = 0
+    for picks in picks_list:
+        cap = next((p for p in (picks or {}).get("picks", []) if p.get("is_captain")), None)
+        if not cap:
+            continue
+        counts[cap["element"]] = counts.get(cap["element"], 0) + 1
+        if (picks or {}).get("active_chip") == "3xc":
+            triple += 1
+    total = sum(counts.values())
+    rows = [{"id": pid, "name": players.get(pid, {}).get("name", "?"),
+             "team": players.get(pid, {}).get("team", ""), "count": c,
+             "pct": round(100 * c / total, 1)} for pid, c in counts.items()]
+    rows.sort(key=lambda r: (-r["count"], r["name"]))
+    return rows, total, triple
+
+
+def _current_event(bootstrap: dict):
+    events = bootstrap.get("events", [])
+    return next((e for e in events if e.get("is_current")), None) or         next((e for e in reversed(events) if e.get("finished")), None)
+
+
+def _sample_captaincy(bootstrap: dict, event: dict) -> dict:
+    gw = event["id"]
+    teams = {t["id"]: t.get("short_name", "") for t in bootstrap.get("teams", [])}
+    players = {e["id"]: {"name": e.get("web_name", ""), "team": teams.get(e.get("team"), "")}
+               for e in bootstrap.get("elements", [])}
+    ranked = event.get("ranked_count") or bootstrap.get("total_players") or 50
+
+    with ThreadPoolExecutor(max_workers=16) as pool:
+        page_f = [pool.submit(_get_or_none,
+                              f"{API}/leagues-classic/{OVERALL_LEAGUE}/standings/?page_standings={p}")
+                  for p in sample_pages(ranked)]
+        entries = [r["entry"] for f in page_f
+                   for r in ((f.result() or {}).get("standings", {}).get("results", []))]
+        pick_f = [pool.submit(_get_or_none, f"{API}/entry/{eid}/event/{gw}/picks/") for eid in entries]
+        picks_list = [f.result() for f in pick_f]
+
+    rows, total, triple = summarize_captains(picks_list, players)
+    return {
+        "status": "ready",
+        "gameweek": gw,
+        "sample_size": total,
+        "ranked_count": ranked,
+        "triple_captain_pct": round(100 * triple / total, 1) if total else 0.0,
+        "official_most_captained": players.get(event.get("most_captained"), {}).get("name"),
+        "players": rows,
+    }
+
+
+def _run_sample(bootstrap: dict, event: dict):
+    gw = event["id"]
+    try:
+        result = _sample_captaincy(bootstrap, event)
+        if result["sample_size"]:
+            with _cap_lock:
+                _cap_results[gw] = result
+    finally:
+        with _cap_lock:
+            _cap_running.discard(gw)
+
+
+def get_global_captaincy() -> dict:
+    """
+    Estimated worldwide captain split for the current GW. FPL publishes only the
+    single most-captained player per GW, so this samples ~SAMPLE_PAGES*50
+    managers evenly across the overall rankings and counts their captains.
+    Returns {"status": "pending"} while the background sample is running.
+    """
+    bootstrap = get_bootstrap()
+    event = _current_event(bootstrap)
+    if not event:
+        return {"status": "ready", "gameweek": None, "sample_size": 0, "players": []}
+    gw = event["id"]
+    with _cap_lock:
+        if gw in _cap_results:
+            return _cap_results[gw]
+        if gw not in _cap_running:
+            _cap_running.add(gw)
+            threading.Thread(target=_run_sample, args=(bootstrap, event), daemon=True).start()
+    return {"status": "pending", "gameweek": gw, "sample_target": SAMPLE_PAGES * 50}
 
 
 # ---------- Assembly ----------

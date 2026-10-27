@@ -373,24 +373,6 @@
     );
   }
 
-  // ── VIRTUAL H2H ──
-  function renderH2H() {
-    const rows = ML.insights.h2h;
-    document.getElementById('ml-h2h').innerHTML = `
-      <table class="ml-mini-table">
-        <thead><tr><th>#</th><th class="ml-hm-team">Team</th><th>W</th><th>D</th><th>L</th><th class="ml-pct-col">Win %</th><th>Pts</th></tr></thead>
-        <tbody>${rows.map((r, i) => `
-          <tr class="${r.entry === myEntry ? 'me' : ''}" style="animation-delay:${i * 50}ms">
-            <td class="ml-hm-rank">${i + 1}</td>
-            <td class="ml-hm-team">${managerChip(r.entry)}</td>
-            <td>${r.w}</td><td>${r.d}</td><td>${r.l}</td>
-            <td class="ml-pct-col"><div class="ml-pct"><span style="--w:${r.win_pct}%;background:${colorOf[r.entry]}"></span><b>${r.win_pct}%</b></div></td>
-            <td class="ml-mini-pts">${r.points}</td>
-          </tr>`).join('')}
-        </tbody>
-      </table>`;
-  }
-
   // ── HOT FORM ──
   function sparkline(series, color) {
     if (series.length < 2) return '';
@@ -430,15 +412,41 @@
   }
 
   // ── CAPTAINCY ──
-  function renderCaptains() {
-    const { popular, share } = ML.insights.captains;
-    const top = popular.slice(0, 6);
-    const rest = popular.slice(6).reduce((s, c) => s + c.count, 0);
-    const labels = top.map(c => c.name).concat(rest ? ['Others'] : []);
+  // Worldwide split is a background-sampled estimate (see /api/captaincy):
+  // the endpoint answers "pending" until the sample is ready, so poll.
+  const CAP_POLL_MS = 3000;
+  const CAP_POLL_MAX = 40;
+
+  async function loadGlobalCaptaincy(attempt = 0) {
+    const status = document.getElementById('ml-donut-status');
+    try {
+      const res = await fetch('/api/captaincy');
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      if (data.status === 'pending') {
+        status.innerHTML = `<div class="spinner"><div class="spin"></div> Sampling ${data.sample_target} managers worldwide… (about 30–45 s, once per gameweek)</div>`;
+        if (attempt < CAP_POLL_MAX) setTimeout(() => loadGlobalCaptaincy(attempt + 1), CAP_POLL_MS);
+        else status.innerHTML = '<p class="text-muted small">Sampling is taking longer than usual. Try again in a minute.</p>';
+        return;
+      }
+      status.innerHTML = '';
+      renderGlobalDonut(data);
+    } catch (e) {
+      status.innerHTML = `<p class="text-danger small">Failed to load worldwide captaincy: ${esc(e.message || e)}</p>`;
+    }
+  }
+
+  function renderGlobalDonut(data) {
+    const players = data.players || [];
+    if (!players.length) return;
+    const top = players.slice(0, 6);
+    const rest = players.slice(6).reduce((s, c) => s + c.count, 0);
+    const labels = top.map(c => `${c.name} (${c.team})`).concat(rest ? ['Others'] : []);
     const counts = top.map(c => c.count).concat(rest ? [rest] : []);
-    const total = counts.reduce((a, b) => a + b, 0) || 1;
+    const total = data.sample_size || 1;
     const colors = ['#0ea5e9', '#f59e0b', '#8b5cf6', '#10b981', '#ef4444', '#ec4899', '#94a3b8'];
 
+    document.getElementById('ml-cap-global-note').textContent = `Worldwide captain picks, GW${data.gameweek}`;
     if (charts.donut) charts.donut.destroy();
     charts.donut = new Chart(document.getElementById('ml-cap-donut'), {
       type: 'doughnut',
@@ -450,18 +458,30 @@
         animation: REDUCED ? false : { animateRotate: true, duration: 1400 },
         plugins: {
           legend: { position: 'right', labels: { boxWidth: 12, font: { size: 11 } } },
-          tooltip: { callbacks: { label: c => {
-            const p = popular.find(x => x.name === c.label);
-            return `${c.label}: ${c.parsed}× (${Math.round(100 * c.parsed / total)}%)${p ? ` · ${p.points} pts` : ''}`;
-          } } },
+          tooltip: { callbacks: { label: c => `${c.label}: ${(100 * c.parsed / total).toFixed(1)}%` } },
         },
       },
     });
-    if (top.length) {
-      document.getElementById('ml-donut-center').innerHTML =
-        `<b>${Math.round(100 * top[0].count / total)}%</b><span>${esc(top[0].name)}</span>`;
-    }
+    document.getElementById('ml-donut-center').innerHTML =
+      `<b>${Math.round(top[0].pct)}%</b><span>${esc(top[0].name)}</span>`;
 
+    // How this compares with your own pick, plus where the numbers come from
+    const gwIndex = ML.gameweeks.indexOf(data.gameweek);
+    const mine = myEntry && gwIndex >= 0 ? week(myEntry, gwIndex) : null;
+    let yours = '';
+    if (mine && mine.captain) {
+      const p = players.find(x => x.name === mine.captain.name);
+      yours = `Your captain <b>${esc(mine.captain.name)}</b> was picked by ${p ? `${p.pct}%` : 'under 1%'} of the sample. `;
+    }
+    const moe = (196 * Math.sqrt(0.25 / total)).toFixed(0);
+    document.getElementById('ml-cap-global-foot').innerHTML = yours +
+      `Estimated from ${total} active managers sampled evenly across all ${Number(data.ranked_count).toLocaleString()} ranks ` +
+      `(margin of error about ±${moe}%). FPL's official most-captained: <b>${esc(data.official_most_captained || '–')}</b>.` +
+      (data.triple_captain_pct ? ` ${data.triple_captain_pct}% played Triple Captain.` : '');
+  }
+
+  function renderCaptainShare() {
+    const share = ML.insights.captain_share;
     const max = Math.max(1, ...share.map(r => r.pct));
     const wrap = document.getElementById('ml-cap-share');
     wrap.innerHTML = share.map((r, i) => `
@@ -643,9 +663,8 @@
       onVisible(document.getElementById('ml-bump-wrap'), renderBump);
       onVisible(document.getElementById('ml-gap-wrap'), renderGap);
       onVisible(document.getElementById('ml-orank-wrap'), renderOverallRank);
-      renderH2H();
       renderForm();
-      onVisible(document.getElementById('ml-cap-donut-wrap'), renderCaptains);
+      onVisible(document.getElementById('ml-cap-donut-wrap'), () => { renderCaptainShare(); loadGlobalCaptaincy(); });
       onVisible(document.getElementById('ml-ranges').closest('.ml-section'), renderRanges);
       renderChips();
       renderRecords();
