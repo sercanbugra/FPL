@@ -93,7 +93,15 @@ so cold starts refetch everything.
    takes ~30–45 s. It runs once per GW in a background thread (picks lock at the
    deadline), and the endpoint returns `{"status": "pending"}` until it's done, so the
    frontend polls.
-7. `fpldash/views.py` is kept thin. Each `api_*` view builds data via the modules above
+7. `fpldash/transfers.py` suggests up to 5 transfers for a manager (`/api/transfers?id=`).
+   Each player's xPts over the next 3 GWs is ML predicted score × FDR factor ×
+   chance of playing. A swap's gain is the change in `squad_value()`: the best
+   formation-legal XI, plus the captain, plus the bench at 0.1 weight. Swaps are
+   picked greedily so the set is valid together (no double buys, max 3 per club).
+   Each swap is priced against the current bank only, and incoming players need
+   regular minutes. The public API has no selling prices, so budgets use current
+   prices.
+8. `fpldash/views.py` is kept thin. Each `api_*` view builds data via the modules above
    and returns `JsonResponse`. Business logic beyond request parsing and error wrapping
    doesn't belong here. A few views call the FPL API directly and are **uncached**:
    - `/api/myteam` (optional `?id=` for any manager, default `FPL_TEAM_ID`) calls
@@ -102,9 +110,9 @@ so cold starts refetch everything.
    - `/api/pricechanges` tries three sources in order: official X API (needs the
      token), Nitter RSS mirrors, then a Twitter syndication endpoint scrape.
      `/api/pricechanges_fpl` instead derives changes from bootstrap `cost_change_event`.
-8. The frontend is a single page: `fpldash/templates/fpldash/index.html` (markup plus
-   most of the JS inline), `static/fpldash/polygon.js`, `static/fpldash/mini_league.js`
-   and `static/fpldash/style.css`. It uses jQuery, DataTables, Bootstrap 5 and Chart.js
+9. The frontend is a single page: `fpldash/templates/fpldash/index.html` (markup plus
+   most of the JS inline), `static/fpldash/polygon.js`, `static/fpldash/mini_league.js`,
+   `static/fpldash/transfers.js` and `static/fpldash/style.css`. It uses jQuery, DataTables, Bootstrap 5 and Chart.js
    via CDN, with no build step. A left **My Squad** sidebar (team-ID input, resizable)
    sits beside these main tabs:
    - Player Stats (`/api/data`)
@@ -112,6 +120,7 @@ so cold starts refetch everything.
    - Polygon Filter: a radar chart whose metrics are read dynamically from `/api/data`,
      with no hardcoded whitelist, and per-metric min→max axes
    - Squad Builder (`/api/squad-builder`)
+   - Transfers (`/api/transfers`, for the team ID saved in My Squad)
    - Table & Fixtures (`/api/table` beside `/api/fixtures?gw=`)
    - Mini League (`/api/mini-league` plus `/api/captaincy`), an animated report
 
@@ -125,7 +134,7 @@ so cold starts refetch everything.
 
 Because nothing is persisted, correctness work is almost always about the
 transform/scoring logic (`fpl_data.py`, `forecast.py`, `ml_predictions.py`,
-`squad_builder.py`, `league.py`, `mini_league.py`) or about cache TTL/threading.
+`squad_builder.py`, `transfers.py`, `league.py`, `mini_league.py`) or about cache TTL/threading.
 `fpldash/tests.py` covers these with no real network calls. It has a page smoke test,
 cache tests with `requests.get` mocked, ILP squad-legality tests against a small
 synthetic bootstrap fixture, and tests for the pure league/mini-league builders against

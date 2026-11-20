@@ -439,3 +439,96 @@ class GlobalCaptaincyTests(TestCase):
         with patch("fpldash.views.get_global_captaincy", return_value=canned):
             resp = Client().get("/api/captaincy")
         self.assertEqual(resp.json(), canned)
+
+
+def _transfer_fixture():
+    """
+    15-man squad (ids 1-15) plus a small transfer pool (ids 101+).
+    `preds` maps id -> ML predicted score; FDR is neutral (3.0) everywhere,
+    so xpts = pred * 3 for fully available players.
+    """
+    def el(pid, pos, team, cost, minutes=900, chance=None, status="a"):
+        return {"id": pid, "web_name": f"P{pid}", "element_type": pos, "team": team,
+                "now_cost": cost, "minutes": minutes, "status": status,
+                "chance_of_playing_next_round": chance, "form": "5.0", "photo": f"{pid}.jpg"}
+
+    squad = [
+        el(1, 1, 1, 50), el(2, 1, 2, 40),                                        # GK (2 = bench)
+        el(3, 2, 1, 50), el(4, 2, 2, 50), el(5, 2, 3, 50), el(6, 2, 4, 50), el(7, 2, 5, 40),
+        el(8, 3, 1, 80), el(9, 3, 2, 70), el(10, 3, 3, 60), el(11, 3, 4, 60), el(12, 3, 5, 50),
+        el(13, 4, 3, 100), el(14, 4, 4, 70), el(15, 4, 5, 60),
+    ]
+    pool = [
+        el(101, 3, 1, 65),               # strong MID, but team 1 already has 3 players (1, 3, 8)
+        el(102, 3, 6, 64),               # strong MID, affordable for #11 (6.0 + bank 0.5)
+        el(103, 3, 6, 90),               # strongest MID but too expensive
+        el(104, 1, 6, 45),               # much better GK, but only replaces the bench GK
+        el(105, 3, 7, 62, minutes=30),   # great per-90 numbers on barely any minutes
+        el(106, 3, 8, 60, chance=25),    # injured
+    ]
+    preds = {1: 5, 2: 2, 3: 5, 4: 5, 5: 5, 6: 5, 7: 4, 8: 7, 9: 6, 10: 5, 11: 3, 12: 4,
+             13: 8, 14: 5, 15: 4, 101: 9, 102: 8, 103: 10, 104: 7, 105: 12, 106: 12}
+    bootstrap = {
+        "teams": [{"id": t, "short_name": f"T{t}"} for t in range(1, 9)],
+        "elements": squad + pool,
+        "events": [{"id": gw, "finished": True} for gw in range(1, 11)],
+    }
+    picks = {"entry_history": {"bank": 5},
+             "picks": [{"element": pid, "position": pos}
+                       for pos, pid in enumerate([1, 3, 4, 5, 6, 8, 9, 10, 11, 13, 14, 2, 7, 12, 15], start=1)]}
+    return bootstrap, picks, preds
+
+
+class TransferTests(TestCase):
+    def test_squad_value_counts_best_xi_captain_and_light_bench(self):
+        from fpldash.transfers import squad_value
+        bootstrap, picks, preds = _transfer_fixture()
+        players = [{"id": e["id"], "element_type": e["element_type"], "xpts": preds[e["id"]]}
+                   for e in bootstrap["elements"] if e["id"] <= 15]
+        # XI: GK 5; DEF 5,5,5,5 (+ one of them over the 4.0); MID 7,6,5,4? -> best legal XI by xpts
+        value = squad_value(players)
+        xi_sum = 5 + (5 + 5 + 5 + 5) + (7 + 6 + 5) + (8 + 5 + 4)
+        self.assertAlmostEqual(value, xi_sum + 8 + 0.1 * (2 + 4 + 4 + 3))
+
+    def test_suggestions_respect_budget_club_limit_and_minutes(self):
+        from fpldash.transfers import suggest_transfers
+        bootstrap, picks, preds = _transfer_fixture()
+        result = suggest_transfers(bootstrap, picks, preds, {}, n=5)
+        swaps = [(s["out"]["id"], s["in"]["id"]) for s in result["suggestions"]]
+
+        self.assertEqual(swaps[0], (11, 102))  # weakest starter -> best affordable, legal MID
+        bought = [i for _, i in swaps]
+        # P101 is team 1, which already has 3 players: only legal when a team-1 player leaves
+        self.assertIn((8, 101), swaps)
+        # All suggestions applied together never exceed 3 players per club
+        clubs = {e["id"]: e["team"] for e in bootstrap["elements"]}
+        final = ({p["element"] for p in picks["picks"]} - {o for o, _ in swaps}) | set(bought)
+        counts = {}
+        for pid in final:
+            counts[clubs[pid]] = counts.get(clubs[pid], 0) + 1
+        self.assertLessEqual(max(counts.values()), 3)
+        self.assertNotIn(103, bought)          # over budget
+        self.assertNotIn(105, bought)          # not enough minutes
+        self.assertNotIn(106, bought)          # injured
+        self.assertEqual(len(bought), len(set(bought)))
+        self.assertEqual(result["suggestions"][0]["bank_after"], 0.1)
+        self.assertEqual(result["suggestions"][0]["strength"], "strong")
+
+    def test_bench_upgrade_is_not_worth_much(self):
+        from fpldash.transfers import suggest_transfers
+        bootstrap, picks, preds = _transfer_fixture()
+        result = suggest_transfers(bootstrap, picks, preds, {}, n=5)
+        gk = [s for s in result["suggestions"] if s["out"]["id"] == 2]
+        # P104 (xpts 21) vs bench GK P2 (xpts 6): a 15-pt raw gain, but he'd only
+        # start over P1 (15) -> real gain is the XI difference plus a bench sliver.
+        if gk:
+            self.assertLess(gk[0]["gain"], 7)
+
+    @override_settings(SECURE_SSL_REDIRECT=False)
+    def test_api_transfers_validates_id(self):
+        self.assertEqual(Client().get("/api/transfers", {"id": "abc"}).status_code, 400)
+        canned = {"bank": 0.0, "horizon": 3, "squad": [], "suggestions": []}
+        with patch("fpldash.views.get_transfer_suggestions", return_value=canned) as mock_get:
+            resp = Client().get("/api/transfers", {"id": "123"})
+        mock_get.assert_called_once_with("123")
+        self.assertEqual(resp.json(), canned)

@@ -966,6 +966,106 @@ div.dataTables_wrapper .dataTables_paginate .paginate_button:hover {
 .squad-card .player-card { background: #fff; }
 
 /* ============================================================
+   TRANSFERS TAB
+   ============================================================ */
+.tx-wrap { flex: 1 1 auto; overflow-y: auto; min-height: 0; padding: 14px; }
+.tx-wrap > * { max-width: 980px; }
+
+.tx-method {
+  font-size: 0.76rem;
+  line-height: 1.55;
+  color: var(--muted);
+  background: var(--bg-card);
+  border-left: 3px solid var(--primary);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  margin-bottom: 14px;
+}
+.tx-method b { color: var(--text); }
+
+.tx-list { display: flex; flex-direction: column; gap: 12px; }
+
+.tx-card {
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  border-top: 4px solid var(--muted);
+  padding: 12px 14px;
+  animation: ml-rise 0.5s ease both;
+}
+.tx-card.strong   { border-top-color: var(--success); }
+.tx-card.good     { border-top-color: var(--primary); }
+.tx-card.marginal { border-top-color: var(--warning); }
+
+.tx-card-hdr { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.tx-rank { font-weight: 900; color: var(--muted); }
+.tx-strength {
+  font-size: 0.66rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-radius: 999px;
+  padding: 2px 10px;
+  color: #fff;
+  background: var(--muted);
+}
+.tx-strength.strong   { background: var(--success); }
+.tx-strength.good     { background: var(--primary); }
+.tx-strength.marginal { background: var(--warning); }
+.tx-gain { margin-left: auto; font-size: 1.3rem; font-weight: 900; color: var(--success); font-variant-numeric: tabular-nums; }
+.tx-gain small { font-size: 0.65rem; color: var(--muted); font-weight: 700; }
+
+.tx-swap { display: grid; grid-template-columns: minmax(0, 1fr) 32px minmax(0, 1fr); align-items: center; gap: 8px; }
+.tx-arrow { font-size: 1.5rem; font-weight: 900; color: var(--muted); text-align: center; }
+
+.tx-player {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: var(--radius-sm);
+  padding: 8px;
+  min-width: 0;
+}
+.tx-player.out { background: #fef2f2; }
+.tx-player.in  { background: #f0fdf4; }
+.tx-player img { width: 48px; height: 48px; border-radius: 50%; object-fit: cover; background: #fff; flex-shrink: 0; }
+.tx-player.out img { border: 2px solid var(--danger); }
+.tx-player.in img  { border: 2px solid var(--success); }
+.tx-pinfo { min-width: 0; }
+.tx-pname { font-weight: 800; font-size: 0.88rem; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tx-psub { font-size: 0.72rem; color: var(--muted); margin: 2px 0; }
+.tx-pstats { display: flex; flex-wrap: wrap; gap: 10px; font-size: 0.72rem; color: var(--muted); }
+.tx-pstats b { color: var(--text); }
+.tx-flag {
+  font-size: 0.6rem;
+  font-weight: 800;
+  color: #fff;
+  background: var(--warning);
+  border-radius: 4px;
+  padding: 0 4px;
+  vertical-align: middle;
+  cursor: help;
+}
+
+.tx-foot { display: flex; flex-wrap: wrap; gap: 16px; font-size: 0.74rem; color: var(--muted); margin-top: 10px; }
+.tx-foot b { color: var(--text); }
+.tx-note { color: var(--warning); font-weight: 700; }
+.tx-alts { font-size: 0.72rem; color: var(--muted); margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.tx-alt { background: var(--bg-base); border-radius: 999px; padding: 2px 10px; color: var(--text); font-weight: 700; }
+.tx-alt small { color: var(--muted); font-weight: 600; }
+.tx-fewer { font-size: 0.76rem; color: var(--muted); margin: 12px 2px 0; }
+
+.tx-h { margin-top: 22px; }
+.tx-squad-wrap { background: var(--bg-card); border-radius: var(--radius); box-shadow: var(--shadow-sm); overflow-x: auto; }
+.tx-squad { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+.tx-squad th { font-size: 0.66rem; text-transform: uppercase; color: var(--muted); text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+.tx-squad td { padding: 6px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.tx-squad tr:last-child td { border-bottom: none; }
+.tx-squad tr.bench td { color: var(--muted); }
+
+@media (prefers-reduced-motion: reduce) { .tx-card { animation: none; } }
+
+/* ============================================================
    TABLE & FIXTURES TAB
    ============================================================ */
 /* Side by side when there's room (each column scrolls on its own),
@@ -1911,6 +2011,11 @@ div.dataTables_wrapper .dataTables_paginate .paginate_button:hover {
   .ml-form-row { grid-template-columns: 18px minmax(0, 1fr) 70px 52px; }
   .ml-form-trend { display: none; }
   .ml-spark { width: 70px; }
+
+  /* Transfers: stack out/in vertically */
+  .tx-wrap { padding: 8px; }
+  .tx-swap { grid-template-columns: minmax(0, 1fr); }
+  .tx-arrow { transform: rotate(90deg); line-height: 1; }
 }
 
 /* ============================================================

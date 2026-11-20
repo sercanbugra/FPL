@@ -10,7 +10,7 @@
   <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
   <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.1/css/buttons.dataTables.min.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.3.0/css/bootstrap.min.css">
-  <link rel="stylesheet" href="{% static 'fpldash/style.css' %}?v=26">
+  <link rel="stylesheet" href="{% static 'fpldash/style.css' %}?v=27">
 </head>
 
 <body>
@@ -55,6 +55,7 @@
         <button class="tab-btn"        data-tab="forecast">GW Forecast</button>
         <button class="tab-btn"        data-tab="polygon">Polygon Filter</button>
         <button class="tab-btn"        data-tab="builder">Squad Builder</button>
+        <button class="tab-btn"        data-tab="transfers">Transfers</button>
         <button class="tab-btn"        data-tab="table">Table &amp; Fixtures</button>
         <button class="tab-btn"        data-tab="league">Mini League</button>
       </nav>
@@ -135,6 +136,18 @@
                 <div class="spinner"><div class="spin"></div> Loading fixtures…</div>
               </div>
             </div>
+          </div>
+        </div>
+
+        <!-- Transfers: suggestions for the My Squad team -->
+        <div class="tab-pane" id="pane-transfers">
+          <div class="builder-toolbar">
+            <span class="tf-title" id="txTitle">Transfer suggestions</span>
+            <button id="txRefreshBtn" class="btn btn-outline-secondary btn-sm">Refresh</button>
+            <span class="builder-hint" id="txHint"></span>
+          </div>
+          <div class="tx-wrap" id="tx-wrap">
+            <p class="text-muted small p-3">Open this tab to analyse your squad.</p>
           </div>
         </div>
 
@@ -286,6 +299,7 @@
   <button class="mnav-btn"        data-msec="picks">Picks</button>
   <button class="mnav-btn"        data-msec="polygon">Filter</button>
   <button class="mnav-btn"        data-msec="builder">Build</button>
+  <button class="mnav-btn"        data-msec="transfers">Transfers</button>
   <button class="mnav-btn"        data-msec="table">Table</button>
   <button class="mnav-btn"        data-msec="league">League</button>
 </nav>
@@ -313,6 +327,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="{% static 'fpldash/polygon.js' %}?v=6"></script>
 <script src="{% static 'fpldash/mini_league.js' %}?v=4"></script>
+<script src="{% static 'fpldash/transfers.js' %}?v=1"></script>
 
 <script>
 // ── UTILS ──────────────────────────────────────────────────
@@ -353,6 +368,7 @@ function setupTabs() {
       if (btn.dataset.tab === 'builder') ensureBuilderLoaded();
       if (btn.dataset.tab === 'table') { ensureLeagueTableLoaded(); ensureFixturesLoaded(); }
       if (btn.dataset.tab === 'league') ensureMiniLeagueLoaded();
+      if (btn.dataset.tab === 'transfers') ensureTransfersLoaded();
     });
   });
   // Rail tabs
@@ -386,6 +402,7 @@ function applyTeamId() {
   if (!/^\d+$/.test(val)) return;
   localStorage.setItem('fplTeamId', val);
   loadMyTeam();
+  if (window.reloadTransfers) reloadTransfers();
 }
 
 async function loadMyTeam() {
@@ -1130,7 +1147,7 @@ function setupMobileNav() {
       mainContent.classList.add('mob-visible');
       // Activate the matching main tab
       const tabMap = { stats: 'stats', forecast: 'forecast', polygon: 'polygon', builder: 'builder',
-                       table: 'table', league: 'league' };
+                       table: 'table', league: 'league', transfers: 'transfers' };
       const tabName = tabMap[sec];
       if (tabName) {
         document.querySelectorAll('.main-tabs .tab-btn').forEach(b => b.classList.remove('active'));
@@ -1147,6 +1164,7 @@ function setupMobileNav() {
         if (tabName === 'builder') ensureBuilderLoaded();
         if (tabName === 'table') { ensureLeagueTableLoaded(); ensureFixturesLoaded(); }
         if (tabName === 'league') ensureMiniLeagueLoaded();
+        if (tabName === 'transfers') ensureTransfersLoaded();
       }
     }
   }

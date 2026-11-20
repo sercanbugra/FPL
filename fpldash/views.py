@@ -13,6 +13,7 @@ from .fpl_data import get_fpl_data
 from .forecast import get_forecast_data
 from .league import compute_league_table, get_gameweek_fixtures
 from .mini_league import get_mini_league, get_global_captaincy
+from .transfers import get_transfer_suggestions
 from .ml_predictions import get_ml_predicted_scores
 from .squad_builder import build_squads
 
@@ -248,6 +249,17 @@ def api_captaincy(request):
     """Estimated worldwide captain split for the current GW (sampled; see mini_league.py)."""
     try:
         return JsonResponse(get_global_captaincy())
+    except Exception as ex:
+        return JsonResponse({"error": str(ex)}, status=500)
+
+
+def api_transfers(request):
+    """Up to 5 transfer suggestions for a manager's squad (?id=, default FPL_TEAM_ID)."""
+    team_id = request.GET.get("id", "").strip() or TEAM_ID
+    if not team_id.isdigit():
+        return JsonResponse({"error": "Team id must be a number"}, status=400)
+    try:
+        return JsonResponse(get_transfer_suggestions(team_id))
     except Exception as ex:
         return JsonResponse({"error": str(ex)}, status=500)
 
